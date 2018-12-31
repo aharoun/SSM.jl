@@ -1,0 +1,10 @@
+name = "StateSpaceModeling"
+uuid = "7406de56-0c63-11e9-01b6-85342a3d796d"
+authors = ["Harun Alp <harun.alp@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"

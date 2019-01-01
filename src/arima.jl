@@ -26,7 +26,7 @@ function StateSpace(a::arima)
     G[1+a.d:a.p+a.d,1 + a.d]   = a.ϕ
     G[1+a.d:m-1+a.d,2+a.d:end] = diagm(0 => ones(m-1))
     for i in 1:a.d
-      G[i,i:a.d+1] .= 1.0
+	G[i,i:a.d+1] .= 1.0
     end
 
     R = zeros(m + a.d,1)

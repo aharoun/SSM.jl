@@ -49,6 +49,7 @@ Estimates state space model. All the entries of the state space matrices with Na
 
 """
 function estimate(ssm::StateSpace,y)
+    ssm = deepcopy(ssm)
 
     estFNames, estFIndex, nParEst = getEstParamIndexSSM(ssm::StateSpace)
 
@@ -59,10 +60,11 @@ function estimate(ssm::StateSpace,y)
 		      Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
 
     ssmNegLogLike!(res.minimizer, ssm, y, estFNames, estFIndex)
-    return ssm,res
+    return ssm, res
 end
 
 function estimate(a::AbstractTimeModel,y)
+    a       = deepcopy(a)
     ssm     = StateSpace(a)
     ssm,res = estimate(ssm::StateSpace,y)
     getParamFromSSM!(ssm,a)

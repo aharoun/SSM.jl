@@ -14,7 +14,7 @@ include("statespace.jl")
 include("arima.jl")
 
 
-export StateSpace, logLike_Y, arima, simulate, estimate, parseObjFunc  
+export StateSpace, logLike_Y, arima, simulate, estimate
 
 end # module
 

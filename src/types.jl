@@ -4,13 +4,15 @@
 abstract type AbstractTimeModel end
 
 struct ssmGeneric <: AbstractTimeModel end
-'''
- Model representation
- y_{t} = A + B s_{t} + u
- s_{t} = G s_{t-1} + R*ep
- var(u) ~ H
- var(ep) ~ S
-'''
+
+
+# '''
+#  Model representation
+#  y_{t} = A + B s_{t} + u
+#  s_{t} = G s_{t-1} + R*ep
+#  var(u) ~ H
+#  var(ep) ~ S
+# '''
 
 mutable struct StateSpace{T<:Real} 
     A :: Array{T,1}

@@ -14,14 +14,6 @@ function arima(ϕ::Array{T,1}, θ::Array{T,1}, σ2::T, d::Int64) where T
   arima(p,d,q,ϕ,θ,σ2)
 end
 
-function Base.show(io::IO, a::arima)
-  println(io,"ARIMA(",a.p,",",a.d,",",a.q,") Model")
-  println(io,"-------------------")
-  println(io," AR: ",a.ϕ)
-  println(io," MA: ",a.θ)
-  println(io," σ2: ",a.σ2)
-end
-
 
 function StateSpace(a::arima)
     m = max(a.p,a.q + 1)

@@ -13,11 +13,9 @@ a.σ2 = .1
 
 y = simulate(a,500)
 
-a = arima(3,0,2)
+@time estimate(arima(3,0,2), y)
 
-@time estimate(a,y)
-
-@time logLike_Y(s,y)
 
 s = StateSpace(a)
-f,n = parseObjFunc(s,y)
+
+@time logLike_Y(s,y)

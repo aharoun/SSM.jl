@@ -25,9 +25,9 @@ mutable struct StateSpace{T<:Real}
     model :: AbstractTimeModel
 end
 
-function StateSpace(A, B, R, H, S)
+function StateSpace(A, B, G, R, H, S)
   m = ssmGeneric()
-  StateSpace(A, B, R, H, S, m)
+  StateSpace(A, B, G, R, H, S, m)
 end
 
 function Base.show(io::IO, m::StateSpace)

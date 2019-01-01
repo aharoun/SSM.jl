@@ -39,7 +39,7 @@ function StateSpace(a::arima)
 
 end
 
-# this can be done generic but MvNormal does not like zero variances
+# this can be done generic but MvNormal does not like zero variance
 function simulate(a::arima,T::Int64)
     Random.seed!(1234)
     ssm = StateSpace(a)

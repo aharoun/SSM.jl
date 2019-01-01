@@ -13,9 +13,6 @@ a.σ2 = .1
 
 y = simulate(a,500)
 
-@time estimate(arima(3,0,2), y)
+@time res, s = estimate(arima(3,0,2), y);
 
 
-s = StateSpace(a)
-
-@time logLike_Y(s,y)

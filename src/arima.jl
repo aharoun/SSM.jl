@@ -8,10 +8,10 @@ function arima(p::Int64,d::Int64,q::Int64)
 end
 
 function arima(ϕ::Array{T,1}, θ::Array{T,1}, σ2::T, d::Int64) where T
-  p = length(ϕ)
-  q = length(θ)
+    p = length(ϕ)
+    q = length(θ)
 
-  arima(p,d,q,ϕ,θ,σ2)
+    arima(p,d,q,ϕ,θ,σ2)
 end
 
 
@@ -62,32 +62,32 @@ function simulate(a::arima,T::Int64)
 end
 
 function initializeCoeff(a::arima, y, nParEst)
+    # use OLS results to initialize MLE estimation
+    dy = y
+    for i in 1:a.d
+	dy = diff(dy)
+    end
 
-  # use OLS results to initialize MLE estimation
-  dy = y
-  for i in 1:a.d
-      dy = diff(dy)
-  end
+    T = size(dy,1)
 
-  T = size(dy,1)
-  # AR Part
-  X = zeros(T-a.p,a.p)
-  for i in 1:a.p
-    X[:,i] = dy[a.p+1-i:end-i]
-  end
+    # AR Part
+    X = zeros(T-a.p,a.p)
+    for i in 1:a.p
+      X[:,i] = dy[a.p+1-i:end-i]
+    end
+    pAR = (X'*X)\(X'*dy[a.p+1:end])
 
-  pAR = (X'*X)\(X'*dy[a.p+1:end])
-  # MA part : recover residuals and do OLS
-  resid = dy[a.p+1:end] - X*pAR
-  T = size(resid,1)
-  X = zeros(T-a.q,a.q)
-  for i in 1:a.q
-    X[:,i] = resid[a.q+1-i:end-i]
-  end
-  
-  pMA = (X'*X)\(X'*resid[a.q+1:end])
+    # MA part : recover residuals and do OLS
+    resid = dy[a.p+1:end] - X*pAR
+    T = size(resid,1)
+    X = zeros(T-a.q,a.q)
+    for i in 1:a.q
+      X[:,i] = resid[a.q+1-i:end-i]
+    end
 
-  pσ2 = var(resid)
+    pMA = (X'*X)\(X'*resid[a.q+1:end])
 
-  return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2) ? pσ2 : []]
+    pσ2 = var(resid)
+
+    return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2) ? pσ2 : []]
 end

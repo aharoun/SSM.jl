@@ -26,16 +26,17 @@ mutable struct StateSpace{T<:Real}
 end
 
 function StateSpace(A, B, G, R, H, S)
-  m = ssmGeneric()
-  StateSpace(A, B, G, R, H, S, m)
+    m = ssmGeneric()
+    StateSpace(A, B, G, R, H, S, m)
 end
 
 function Base.show(io::IO, m::StateSpace)
-  println(io,"State Space Object:")
-  println(io,"-------------------")
-  println(io," nObsVar  : ", size(m.B,1))
-  println(io," nState   : ", size(m.G,1))
-  println(io," modelType: ", typeof(m.model))
+    print(io,"State Space Object ")
+    all(isempty.(_findEstParamIndex(m))) ? println("(Fully parametrized)") : println("(With missing parameters)")
+    println(io,"-------------------")
+    println(io," nObsVar  : ", size(m.B,1))
+    println(io," nState   : ", size(m.G,1))
+    println(io," modelType: ", typeof(m.model))
 end
 
 
@@ -50,10 +51,10 @@ mutable struct arima{T<:Real} <: AbstractTimeModel
 end
 
 function Base.show(io::IO, a::arima)
-  println(io,"ARIMA(",a.p,",",a.d,",",a.q,") Model")
-  println(io,"-------------------")
-  println(io," AR: ",a.ϕ)
-  println(io," MA: ",a.θ)
-  println(io," σ2: ",a.σ2)
+    println(io,"ARIMA(",a.p,",",a.d,",",a.q,") Model")
+    println(io,"-------------------")
+    println(io," AR: ",a.ϕ)
+    println(io," MA: ",a.θ)
+    println(io," σ2: ",a.σ2)
 end
 

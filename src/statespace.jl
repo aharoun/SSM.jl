@@ -1,13 +1,11 @@
 
-
-
 function _initializeKF(ssm::StateSpace,y)
-  n = size(ssm.G,1)
-  s = zeros(n)
-  P = zeros(n,n)
-  F = similar(ssm.H) 
+    n = size(ssm.G,1)
+    s = zeros(n)
+    P = zeros(n,n)
+    F = similar(ssm.H) 
 
-  return s, P, F
+    return s, P, F
 end
 
 
@@ -15,14 +13,14 @@ end
 # Y is Txn matrix where T is sample length and n is the number of variables
 function logLike_Y(ssm::StateSpace,y)
 
-      T       = size(y,1)
-      s, P, F = _initializeKF(ssm,y)
-      ylogL   = 0.0
-      RSR     = ssm.R*ssm.S*ssm.R'
-      y_fore  = similar(ssm.A)
-      pred_err= similar(y_fore)
+    T       = size(y,1)
+    s, P, F = _initializeKF(ssm,y)
+    ylogL   = 0.0
+    RSR     = ssm.R*ssm.S*ssm.R'
+    y_fore  = similar(ssm.A)
+    pred_err= similar(y_fore)
 
-      @inbounds for i in 1:T
+    @inbounds for i in 1:T
 	# forecast
 	s .= ssm.G * s
 	P .= ssm.G * P * ssm.G' + RSR
@@ -39,23 +37,24 @@ function logLike_Y(ssm::StateSpace,y)
 	# update
 	s .+=  P * ssm.B' * (F\pred_err)
 	P .-=  P * ssm.B' * (F\ssm.B)*P'
+    end
 
-      end
-
-      return ylogL
+    return ylogL
 end
+
 
 """
     estimate(s:StateSpace,y)
-Estimates state space model. All the entries of the state space matrices with NaN is considered as unknown parameters to be estimated.
+Estimates state space model. All the entries of the state space matrices with NaN are considered as unknown parameters to be estimated.
 
 """
 function estimate(ssm::StateSpace,y)
 
     estFNames, estFIndex, nParEst = getEstParamIndex(ssm::StateSpace)
+
     objFun = x -> ssmNegLogLike(x, ssm, y, estFNames, estFIndex)
     pInit  = initializeCoeff(ssm.model,y,nParEst)
-  
+
     res    = optimize(x -> ssmNegLogLike(x, ssm, y, estFNames, estFIndex),
 		      pInit,
 		      Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
@@ -64,24 +63,23 @@ function estimate(ssm::StateSpace,y)
 end
 
 function estimate(a::AbstractTimeModel,y)
-  ssm    = StateSpace(a)
-
-  estimate(ssm::StateSpace,y)
+    ssm = StateSpace(a)
+    estimate(ssm::StateSpace,y)
 end
 
 
 function getEstParamIndex(ssm::StateSpace)
-  # mask parameters to be estimated
-  indx = _findEstParamIndex(ssm)
+    # mask parameters to be estimated
+    indx = _findEstParamIndex(ssm)
 
-  if all(isempty.(indx))
-    throw("Nothing to estimate!")
-  end
-  estFNames = (:A, :B, :G, :R, :H, :S)[.!isempty.(indx)]
-  estFIndex = indx[.!isempty.(indx)]
-  nParEst   = sum(length.(estFIndex))
+    if all(isempty.(indx))
+	throw("Nothing to estimate!")
+    end
+    estFNames = (:A, :B, :G, :R, :H, :S)[.!isempty.(indx)]
+    estFIndex = indx[.!isempty.(indx)]
+    nParEst   = sum(length.(estFIndex))
 
-  return estFNames, estFIndex, nParEst
+    return estFNames, estFIndex, nParEst
 end
 
 
@@ -105,8 +103,7 @@ end
 _findEstParamIndex(s::StateSpace) = [findall(isnan, getfield(s,fn))  for fn in (:A, :B, :G, :R, :H, :S)]
 
 
-
 function initializeCoeff(a::AbstractTimeModel, y, nParEst)
-  pInit = ones(nParEst)*0.1
+    pInit = ones(nParEst)*0.1
 end
 

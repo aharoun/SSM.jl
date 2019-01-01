@@ -1,8 +1,9 @@
 using Revise
-using StateSpaceModeling
+using SSM
 using BenchmarkTools
 using Plots
 using CSV
+
 
 
 a = arima(3,0,2)
@@ -14,4 +15,9 @@ y = simulate(a,500)
 
 a = arima(3,0,2)
 
-@time res,s = estimate(a,y)
+@time estimate(a,y)
+
+@time logLike_Y(s,y)
+
+s = StateSpace(a)
+f,n = parseObjFunc(s,y)

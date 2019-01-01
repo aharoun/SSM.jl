@@ -2,25 +2,23 @@
 #=
  Model representation
  y_{t} = A + B s_{t} + u
- s_{t} = Phi s_{t-1} + R*ep
+ s_{t} = G s_{t-1} + R*ep
  var(u) ~ H
  var(ep) ~ S
 =#
-
-mutable struct StateSpaceModel{Tv<:AbstractArray{Float64,1},Tm<:AbstractArray{Float64,2}}
-	A :: Tv
-	B :: Tm
-	Φ :: Tm
-	R :: Tm
-	H :: Tm
-	S :: Tm
-
+mutable struct StateSpace{T<:Real} 
+	A :: AbstractArray{T,1}
+	B :: AbstractArray{T,2}
+	G :: AbstractArray{T,2}
+	R :: AbstractArray{T,2}
+	H :: AbstractArray{T,2}
+	S :: AbstractArray{T,2}
 end
 
 
 
-function initialize(ssm::StateSpaceModel)
-  n = size(ssm.Φ,1)
+function _initializeKF(ssm::StateSpace,y)
+  n = size(ssm.G,1)
   s = zeros(n)
   P = zeros(n,n)
   F = similar(ssm.H) 
@@ -31,10 +29,10 @@ end
 
 # calculate log likelihood of whole data based on Kalman filter
 # Y is Txn matrix where T is sample length and n is the number of variables
-function logLike_Y(ssm::StateSpaceModel,y)
+function logLike_Y(ssm::StateSpace,y)
 
       T       = size(y,1)
-      s, P, F = initialize(ssm)
+      s, P, F = _initializeKF(ssm,y)
       ylogL   = 0.0
       RSR     = ssm.R*ssm.S*ssm.R'
       y_fore  = similar(ssm.A)
@@ -42,14 +40,18 @@ function logLike_Y(ssm::StateSpaceModel,y)
 
       @inbounds for i in 1:T
 	# forecast
-	s .= ssm.Φ * s
-	P .= ssm.Φ * P * ssm.Φ' + RSR
+	s .= ssm.G * s
+	P .= ssm.G * P * ssm.G' + RSR
 	F .= ssm.B * P * ssm.B' + ssm.H
 
 	y_fore   .= ssm.A + ssm.B * s
 	pred_err .= y[i,:] - y_fore
-	ylogL    += (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
-
+	try 
+	  ylogL    += (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
+	catch
+	  ylogL    += 1.0e8
+	  break
+	end
 	# update
 	s .+=  P * ssm.B' * (F\pred_err)
 	P .-=  P * ssm.B' * (F\ssm.B)*P'
@@ -60,67 +62,74 @@ function logLike_Y(ssm::StateSpaceModel,y)
 end
 
 
-# Univariate Arma(p,q)
-mutable struct arma
+abstract type AbstractTimeModel end
 
+
+# Univariate ARIMA(p,d,q) without any constant for now
+mutable struct arima{T<:Real} <: AbstractTimeModel
     p :: Int64
+    d :: Int64
     q :: Int64
-    ϕ :: Array{Float64,1}
-    θ :: Array{Float64,1}
-   σ2 :: Float64
-  ssm :: StateSpaceModel
-
+    ϕ :: Array{T,1}
+    θ :: Array{T,1}
+   σ2 :: T
 end
 
-function arma(ϕ::Array{Float64,1},θ::Array{Float64,1},σ2::Float64)
-    p = length(ϕ)
-    q = length(θ)
+# Initialize arima object with empty parameters
+function arima(p::Int64,d::Int64,q::Int64)
+    ϕ  = fill(NaN,p)
+    θ  = fill(NaN,q)
+    σ2 = NaN
 
-    m = max(p,q + 1)
+    arima(p,d,q,ϕ,θ,σ2)
+end
 
-    # write state space version as arma(m,m-1)
+function arima(ϕ::Array{T,1}, θ::Array{T,1}, σ2::T, d::Int64) where T
+  p = length(ϕ)
+  q = length(θ)
+
+  arima(p,d,q,ϕ,θ,σ2)
+end
+
+function StateSpace(a::arima)
+    m = max(a.p,a.q + 1)
+
     A = zeros(1)
-    B = zeros(1,m)
-    B[1] = 1.0
+    B = zeros(1,m + a.d)
+    B[1:a.d+1] .= 1.0
 
-    Φ = zeros(m,m)
-    Φ[1:p] = ϕ
-    Φ[1:m-1,2:end] = (Matrix(1.0I, m-1, m-1))
- 
-    R = ones(m,1)
-    R[2:q+1] = θ
+    G = zeros(m + a.d,m + a.d)
+    G[1+a.d:a.p+a.d,1 + a.d]   = a.ϕ
+    G[1+a.d:m-1+a.d,2+a.d:end] = diagm(0 => ones(m-1))
+    for i in 1:a.d
+      G[i,i:a.d+1] .= 1.0
+    end
+
+    R = zeros(m + a.d,1)
+    R[1+a.d:1+a.q+a.d] = [1.0;a.θ]
 
     H = zeros(1,1)
+    S = fill(a.σ2,1,1)
 
-    S = fill(σ2,1,1)
-
-    ssm = StateSpaceModel(A, B, Φ, R, H, S)
-
-    arma(p, q, ϕ, θ, σ2, ssm)
-end
-
-arma(ϕ,θ) = arma(ϕ,θ,1.0) 
-
-function arma(p::Int64,q::Int64)
-    ϕ = zeros(p)
-    θ = zeros(q)
-
-    arma(ϕ,θ)
+    ssm = StateSpace(A, B, G, R, H, S)
 
 end
 
 
-function simulate(a::arma,T::Int64)
-
-    ssm = a.ssm
+function simulate(a::arima,T::Int64)
+    Random.seed!(1234)
+    ssm = StateSpace(a)
+    if !all(isempty.(_findEstParamIndex(ssm)))
+      throw("Some parameters are not defined!")
+    end
 
     TT = Int64(round(T*1.3))
     y = zeros(TT,length(ssm.A))
 
-    s  = zeros(size(ssm.Φ,1))
+    s  = zeros(size(ssm.G,1))
 
     @inbounds for t in 1:TT
-	s      .= ssm.Φ*s + ssm.R*rand(MvNormal(ssm.S))
+	s      .= ssm.G*s + ssm.R*rand(MvNormal(ssm.S))
 	y[t,:]  = ssm.A + ssm.B*s 
     end
 
@@ -128,67 +137,75 @@ function simulate(a::arma,T::Int64)
 
 end
 
-function estimate(a::arma,y)
-    p = a.p
-    q = a.q
+function estimate(a::AbstractTimeModel,y)
+    ssm  = StateSpace(a)
+    indx = _findEstParamIndex(ssm)
 
-    pInit  = [ones(p)*.1;ones(q)*.1;.1]
+    if all(isempty.(indx))
+      throw("Nothing to estimate!")
+    end
+    estFNames = (:A, :B, :G, :R, :H, :S)[.!isempty.(indx)]
+    estFIndex = indx[.!isempty.(indx)]
+    nParEst   = sum(length.(estFIndex))
 
-    objFun(x) = x[end]<=0 ? 1.0e8 : -logLike_Y(arma(x[1:p],x[p+1:p+q],x[end]).ssm,y)
 
-    res = optimize(objFun,pInit,show_trace=false)
+    function objFun(x)
+      count = 1
+      for (i,valF) in enumerate(estFNames)
+	for j in eachindex(estFIndex[i])
+	  getproperty(ssm,valF)[estFIndex[i][j]] = x[count]
+	  count+=1
+	end
+      end
+
+      # some checks
+      ssm.S[1]<0.0 ? 1.0e8 : -logLike_Y(ssm,y)
+    end
+      
+    pInit = initializeCoeff(a,y,nParEst)
+
+    res = optimize(objFun,pInit,Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
+
+    return res,ssm
 end
 
-######################################################################################
-
-function modelTechAdpotion(x,nLambda,n)
-    W1 = zeros(2,2);
-    W1[1,1] = x[1]; W1[1,2] = x[2]; W1[2,1] = x[2]; W1[2,2] = x[3];
-    #------------------------------------------------------------
-
-    #------------------------------------------------------------
-   #State space VAR coefficients
-    G1 = zeros((nLambda+2),(nLambda+2))
-
-    G1[1:2,1:2] = reshape(x[4:7],2,2);
-    G1[3:(nLambda+2),2:(nLambda+1)] = diagm(0=>ones(nLambda))
-   #------------------------------------------------------------
-
-   #------------------------------------------------------------
-   #Observation equation var-cov matrix
-   V1 = diagm(0=>x[8:7+n])
-   #------------------------------------------------------------
-
-   #------------------------------------------------------------
-   #Selection matrix
-    R = zeros((nLambda+2), 2);# Selection matrix, not cov matrix (kalman filter reverted to its original version acccordingy)
-    R[1:2,1:2] = diagm(0 => ones(2))
-   #------------------------------------------------------------
-
-    F1 = zeros(n,nLambda+2);
-   #------------------------------------------------------------
-   #Non-tech and tech lag contributions matrix
-   M1 = reshape(x[7+n+1:7+ n + 3*n],3,n)'
-
-    for i in  1:n
-	for j in 2:(nLambda+2)
-	  F1[i,j] = M1[i,1]*exp(-((((j-1) - M1[i,2])^2)/M1[i,3]))
-	end
-    end
-   #------------------------------------------------------------
-
-   #------------------------------------------------------------
-   #Contemparenous non-tech and tech contributions
-   F1[:,1] = x[7+ n + 3*n+1:7+ n + 3*n+n]
-   #------------------------------------------------------------
+_findEstParamIndex(s::StateSpace) = [findall(isnan, getfield(s,fn))  for fn in (:A, :B, :G, :R, :H, :S)]
 
 
-   # kalman filter form
-    A = zeros(n);# this is constant in y-s equation.
-    B = F1
-    H = V1
-    Φ = G1
-    S = W1
+function initializeCoeff(a::AbstractTimeModel,y,nParEst)
+  ones(nParEst)*.1
+end
 
-    ssm = StateSpaceModel(A, B, Φ, R, H, S)
+function initializeCoeff(a::arima,y,nParEst)
+
+  # use OLS results to initialize MLE estimation
+  if a.d == 0
+	dy = y
+  elseif a.d == 1
+	dy = diff(y)
+  else
+	dy = diff(diff(y))
+  end 
+  
+  T = size(dy,1)
+  # AR Part
+  X = zeros(T-a.p,a.p)
+  for i in 1:a.p
+    X[:,i] = dy[a.p+1-i:end-i]
+  end
+ 
+  pAR = (X'*X)\(X'*dy[a.p+1:end])
+  # MA part
+  resid = dy[a.p+1:end] - X*pAR
+  T = size(resid,1)
+  X = zeros(T-a.q,a.q)
+  for i in 1:a.q
+    X[:,i] = resid[a.q+1-i:end-i]
+  end
+  
+  pMA = (X'*X)\(X'*resid[a.q+1:end])
+
+  pσ2 = var(resid)
+
+  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2) ? pσ2 : []]
 end

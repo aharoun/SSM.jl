@@ -5,6 +5,7 @@ using Distributions
 using Optim
 using Statistics
 using Random
+using Calculus
 
 import Base.show
 
@@ -14,7 +15,7 @@ include("statespace.jl")
 include("arima.jl")
 
 
-export StateSpace, ssmGeneric, logLike_Y, arima, simulate, estimate
+export StateSpace, ssmGeneric, nLogLike, arima, simulate, estimate, ssmNegLogLike!
 
 end # module
 

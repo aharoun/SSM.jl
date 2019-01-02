@@ -1,7 +1,8 @@
 
+# TODO : diffuse initialization 
 function _initializeKF(ssm::StateSpace,y)
     n = size(ssm.G,1)
-    s = zeros(n)
+    s = [y[1];zeros(n-1)]
     P = zeros(n,n)
     F = similar(ssm.H) 
 
@@ -11,11 +12,11 @@ end
 
 # calculate log likelihood of whole data based on Kalman filter
 # Y is Txn matrix where T is sample length and n is the number of variables
-function logLike_Y(ssm::StateSpace,y)
+function nLogLike(ssm::StateSpace,y)
 
     T       = size(y,1)
     s, P, F = _initializeKF(ssm,y)
-    ylogL   = 0.0
+    ylogL   = zeros(T)
     RSR     = ssm.R*ssm.S*ssm.R'
     y_fore  = similar(ssm.A)
     pred_err= similar(y_fore)
@@ -29,7 +30,7 @@ function logLike_Y(ssm::StateSpace,y)
 	y_fore   .= ssm.A + ssm.B * s
 	pred_err .= y[i,:] - y_fore
 	try 
-	  ylogL    += (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
+	  ylogL[i]= (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
 	catch
 	  ylogL    += 1.0e8
 	  break
@@ -55,20 +56,33 @@ function estimate(ssm::StateSpace,y)
 
     pInit = initializeCoeff(ssm.model,y,nParEst)
 
-    res   = optimize(x -> ssmNegLogLike!(x, ssm, y, estFNames, estFIndex),
-		      pInit,
-		      Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
+    objFun = x -> sum(ssmNegLogLike!(x, ssm, y, estFNames, estFIndex))
+        res   = optimize( objFun,
+			  pInit,
+		          Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
+
+    stdErr = stdErrParam(res.minimizer, x -> ssmNegLogLike!(x, ssm, y, estFNames, estFIndex))
 
     ssmNegLogLike!(res.minimizer, ssm, y, estFNames, estFIndex)
-    return ssm, res
+    
+    return ssm, res, stdErr
 end
+
+## Standard error of the estimated parameters, based on outer product of score
+function stdErrParam(parEst,nlogl::Function)
+    score  = Calculus.jacobian(nlogl, parEst,:central)
+    cov = pinv(score'*score)
+    cov = (cov + cov')/2
+    std = sqrt.(diag(cov))
+end
+
 
 function estimate(a::AbstractTimeModel,y)
     a       = deepcopy(a)
     ssm     = StateSpace(a)
-    ssm,res = estimate(ssm::StateSpace,y)
+    ssm,res,std = estimate(ssm::StateSpace,y)
     getParamFromSSM!(ssm,a)
-    return a, res
+    return a, res,std
 end
 
 
@@ -104,7 +118,7 @@ function ssmNegLogLike!(x,ssm::StateSpace, y, estFNames, estFIndex)
     end
 
     # more checks needed
-    ssm.S[1]<0.0 ? 1.0e8 : -logLike_Y(ssm,y)
+    ssm.S[1]<0.0 ? 1.0e8 : -nLogLike(ssm,y)
 end
 
 

@@ -6,23 +6,28 @@ mutable struct arima{T<:Real} <: AbstractTimeModel
     q :: Int64		# MA length
     ϕ :: Array{T,1}	# AR coefficients
     θ :: Array{T,1}	# MA coefficients
-   σ2 :: T		# variance of error term
+    σ2:: Array{T,1}	# variance of error term
+
+   estPar :: NTuple{3, Symbol}  # holds the fields of a model type that can be estimated
+
 end
 
 # Initialize arima object with empty parameters
 function arima(p::Int64,d::Int64,q::Int64)
     ϕ  = fill(NaN,p)
     θ  = fill(NaN,q)
-    σ2 = NaN
-
-    arima(p,d,q,ϕ,θ,σ2)
+    σ2 = fill(NaN,1)
+    estPar = (:ϕ, :θ, :σ2)
+    arima(p, d, q, ϕ, θ, σ2, estPar)
 end
 
-function arima(ϕ::Array{T,1}, θ::Array{T,1}, σ2::T, d::Int64) where T
+# Initialize with parameter vectors, some parameters can be set as NaN. Those can be estimated.
+function arima(ϕ::Array{T,1}, θ::Array{T,1}, σ2::Array{T,1}, d::Int64) where T
     p = length(ϕ)
     q = length(θ)
 
-    arima(p,d,q,ϕ,θ,σ2)
+    estPar = (:ϕ, :θ, :σ2)
+    arima(p, d, q, ϕ, θ, σ2, estPar)
 end
 
 function Base.show(io::IO, a::arima)
@@ -53,7 +58,7 @@ function StateSpace(a::arima)
     R[1+a.d:1+a.q+a.d] = [1.0;a.θ]
 
     H = zeros(1,1)
-    S = fill(a.σ2,1,1)
+    S = fill(a.σ2...,1,1)
 
     StateSpace(A, B, G, R, H, S, a)
 
@@ -63,7 +68,7 @@ end
 function simulate(a::arima,T::Int64)
     Random.seed!(20)
     ssm = StateSpace(a)
-    if !all(isempty.(findEstParamIndex(ssm)))
+    if !all(isempty.(findEstParamIndex(a)))
       throw("Some parameters are not defined!")
     end
 
@@ -110,14 +115,10 @@ function initializeCoeff(a::arima, y, nParEst)
 
     pσ2 = var(resid)
 
-    return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2) ? pσ2 : []]
+    return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : []]
 end
 
 
-function getParamFromSSM!(ssm::StateSpace, a::arima)
-     a.ϕ .= ssm.G[1+a.d:a.p+a.d,1 + a.d]
-     a.θ .= ssm.R[2+a.d:1+a.q+a.d]
-     a.σ2 = ssm.S[1]
-end
+
 
 # end

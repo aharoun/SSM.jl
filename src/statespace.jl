@@ -3,13 +3,15 @@ abstract type AbstractTimeModel end
 
 struct ssmGeneric <: AbstractTimeModel end
 
+
+
 #  Model representation
 #  y_{t} = A + B s_{t} + u
 #  s_{t} = G s_{t-1} + R*ep
 #  var(u) ~ H
 #  var(ep) ~ S
 
-mutable struct StateSpace{T<:Real} 
+struct StateSpace{T<:Real} 
     A :: Array{T,1}
     B :: Array{T,2}
     G :: Array{T,2}
@@ -27,12 +29,7 @@ function StateSpace(A, B, G, R, H, S)
 end
 
 function Base.show(io::IO, m::StateSpace)
-    print(io,"State Space Object ")
-    all(isempty.(findEstParamIndex(m))) ? println("(Fully parametrized)") : println("(With missing parameters)")
-    println(io,"-------------------")
-    println(io," nObsVar  : ", size(m.B,1))
-    println(io," nState   : ", size(m.G,1))
-    println(io," modelType: ", typeof(m.model))
+    println(io, "State Space Object for: ", m.model)
 end
 
 # -----------------------------------------------------------------------------------------------
@@ -74,7 +71,7 @@ end
 # TODO : diffuse initialization 
 function _initializeKF(ssm::StateSpace,y)
     n = size(ssm.G,1)
-    s = zeros(n)
+    s = [y[1]; zeros(n-1)]
     P = zeros(n,n)
     F = similar(ssm.H) 
 
@@ -84,55 +81,53 @@ end
 # -----------------------------------------------------------------------------------------------
 
 """
-    estimate(s:StateSpace,y)
-Estimates state space model. All the entries of the state space matrices with NaN are considered as unknown parameters to be estimated.
+    estimate(s:AbstractTimeModel,y)
+Estimates time series model. All the entries of the estimable parameters with NaN are considered as unknown parameters to be estimated.
 
 """
-function estimate(ssm::StateSpace,y)
-    ssm = deepcopy(ssm)
+function estimate(a::AbstractTimeModel, y)
+    a = deepcopy(a)
 
-    estFNames, estFIndex, nParEst = getEstParamIndexSSM(ssm::StateSpace)
+    estPIndex = findEstParamIndex(a)
+    nParEst   = length(vcat(estPIndex...))
 
-    pInit = initializeCoeff(ssm.model,y,nParEst)
+    pInit = initializeCoeff(a, y, nParEst)
 
-    objFun = x -> sum(ssmNegLogLike!(x, ssm, y, estFNames, estFIndex))
+    objFun = x -> sum(negLogLike!(x, a, y, estPIndex))
     res    = optimize(objFun,
 		      pInit,
 		      Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
 
-    stdErr = stdErrParam(res.minimizer, x -> ssmNegLogLike!(x, ssm, y, estFNames, estFIndex))
+    stdErr = stdErrParam(res.minimizer, x -> negLogLike!(x, a, y, estPIndex))
 
-    ssmNegLogLike!(res.minimizer, ssm, y, estFNames, estFIndex)    # to cast ssm at minimizer
+    negLogLike!(res.minimizer, a, y, estPIndex)    # to cast ssm at minimizer
 
-    return ssm, res, stdErr
+    return a, res, stdErr
 end
 
 
-function estimate(a::AbstractTimeModel,y)
-    a   = deepcopy(a)
-    ssm = StateSpace(a)
-    ssm, res, std = estimate(ssm::StateSpace,y)
-    getParamFromSSM!(ssm,a)
-    return a, res,std
-end
 
 # objective function for `estimate`
-function ssmNegLogLike!(x,ssm::StateSpace, y, estFNames, estFIndex)
-    count = 1
-    @inbounds for (i,valF) in enumerate(estFNames)
-      for j in eachindex(estFIndex[i])
-	getproperty(ssm,valF)[estFIndex[i][j]] = x[count]
-	count+=1
-      end
-    end
-
+function negLogLike!(x, a::AbstractTimeModel, y, estPIndex)
+    setEstParam!(x, a::AbstractTimeModel, estPIndex)
+    ssm = StateSpace(a)
     # more checks needed
-    ssm.S[1]<0.0 ? 1.0e8 : -nLogLike(ssm,y)
+    ssm.S[1]<0.0 ? 1.0e8 : -nLogLike(ssm, y)
+end
+
+function setEstParam!(x, a, estPIndex)
+    count = 1
+    @inbounds for (i, valF) in enumerate(a.estPar)
+		  for j in estPIndex[i]
+		      getproperty(a, valF)[j] = x[count]
+			  count+=1
+	          end
+	      end
 end
 
 # Standard error of the estimated parameters, based on outer product of score
 function stdErrParam(parEst,nlogl::Function)
-    score  = Calculus.jacobian(nlogl, parEst,:central)
+    score  = Calculus.jacobian(nlogl, parEst, :central)
     cov = pinv(score'*score)
     cov = (cov + cov')/2
     std = sqrt.(diag(cov))
@@ -147,22 +142,7 @@ function initializeCoeff(a::AbstractTimeModel, y, nParEst)
 end
 
 
-function getEstParamIndexSSM(ssm::StateSpace)
-    # mask parameters to be estimated
-    indx = findEstParamIndex(ssm)
-
-    if all(isempty.(indx))
-	throw("Nothing to estimate!")
-    end
-    estFNames = (:A, :B, :G, :R, :H, :S)[.!isempty.(indx)]
-    estFIndex = indx[.!isempty.(indx)]
-    nParEst   = sum(length.(estFIndex))
-
-    return estFNames, estFIndex, nParEst
-end
-
-
-findEstParamIndex(s::StateSpace) = [findall(isnan, getfield(s,fn))  for fn in (:A, :B, :G, :R, :H, :S)]
+findEstParamIndex(a::AbstractTimeModel) = [findall(isnan, getfield(a,fn))  for fn in a.estPar]
 
 
 # end

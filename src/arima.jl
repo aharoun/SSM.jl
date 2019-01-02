@@ -1,3 +1,14 @@
+
+# Univariate ARIMA(p,d,q) without any constant for now
+mutable struct arima{T<:Real} <: AbstractTimeModel
+    p :: Int64		# AR length
+    d :: Int64		# Integration order
+    q :: Int64		# MA length
+    ϕ :: Array{T,1}	# AR coefficients
+    θ :: Array{T,1}	# MA coefficients
+   σ2 :: T		# variance of error term
+end
+
 # Initialize arima object with empty parameters
 function arima(p::Int64,d::Int64,q::Int64)
     ϕ  = fill(NaN,p)
@@ -14,7 +25,16 @@ function arima(ϕ::Array{T,1}, θ::Array{T,1}, σ2::T, d::Int64) where T
     arima(p,d,q,ϕ,θ,σ2)
 end
 
+function Base.show(io::IO, a::arima)
+    println(io,"ARIMA(",a.p,",",a.d,",",a.q,") Model")
+    println(io,"-------------------")
+    println(io," AR: ",a.ϕ)
+    println(io," MA: ",a.θ)
+    println(io," σ2: ",a.σ2)
+end
 
+
+# Cast arima model into state space
 function StateSpace(a::arima)
     m = max(a.p,a.q + 1)
 
@@ -39,15 +59,15 @@ function StateSpace(a::arima)
 
 end
 
-# this can be done generic but MvNormal does not like zero variance
+# simulate arima model. This can be done generic but MvNormal does not like zero variance
 function simulate(a::arima,T::Int64)
-    Random.seed!(1234)
+    Random.seed!(20)
     ssm = StateSpace(a)
-    if !all(isempty.(_findEstParamIndex(ssm)))
+    if !all(isempty.(findEstParamIndex(ssm)))
       throw("Some parameters are not defined!")
     end
 
-    TT = Int64(round(T*1.3))
+    TT = Int64(round(T*1.5))
     y = zeros(TT,length(ssm.A))
 
     s  = zeros(size(ssm.G,1))
@@ -61,8 +81,9 @@ function simulate(a::arima,T::Int64)
 
 end
 
+# Initialize arima coefficients for estimation
 function initializeCoeff(a::arima, y, nParEst)
-    # use OLS results to initialize MLE estimation
+    # use OLS results
     dy = y
     for i in 1:a.d
 	dy = diff(dy)
@@ -91,3 +112,12 @@ function initializeCoeff(a::arima, y, nParEst)
 
     return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2) ? pσ2 : []]
 end
+
+
+function getParamFromSSM!(ssm::StateSpace, a::arima)
+     a.ϕ .= ssm.G[1+a.d:a.p+a.d,1 + a.d]
+     a.θ .= ssm.R[2+a.d:1+a.q+a.d]
+     a.σ2 = ssm.S[1]
+end
+
+# end

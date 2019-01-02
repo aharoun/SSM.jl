@@ -71,7 +71,7 @@ end
 # TODO : diffuse initialization 
 function _initializeKF(ssm::StateSpace,y)
     n = size(ssm.G,1)
-    s = [y[1]; zeros(n-1)]
+    s = zeros(n)
     P = zeros(n,n)
     F = similar(ssm.H) 
 
@@ -81,11 +81,11 @@ end
 # -----------------------------------------------------------------------------------------------
 
 """
-    estimate(s:AbstractTimeModel,y)
+    _estimate(s:AbstractTimeModel,y)
 Estimates time series model. All the entries of the estimable parameters with NaN are considered as unknown parameters to be estimated.
 
 """
-function estimate(a::AbstractTimeModel, y)
+function _estimate(a::AbstractTimeModel, y)
     a = deepcopy(a)
 
     estPIndex = findEstParamIndex(a)
@@ -96,7 +96,7 @@ function estimate(a::AbstractTimeModel, y)
     objFun = x -> sum(negLogLike!(x, a, y, estPIndex))
     res    = optimize(objFun,
 		      pInit,
-		      Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
+		      Optim.Options(g_tol = 1.0e-12, iterations = 1000, store_trace = false, show_trace = false))
 
     stdErr = stdErrParam(res.minimizer, x -> negLogLike!(x, a, y, estPIndex))
 
@@ -105,7 +105,9 @@ function estimate(a::AbstractTimeModel, y)
     return a, res, stdErr
 end
 
-
+function estimate(a::AbstractTimeModel, y)
+    _estimate(a, y)
+end
 
 # objective function for `estimate`
 function negLogLike!(x, a::AbstractTimeModel, y, estPIndex)

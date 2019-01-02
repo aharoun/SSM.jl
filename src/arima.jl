@@ -40,22 +40,20 @@ end
 
 
 # Cast arima model into state space
+# This is for Δᵈy, so y will be differenced d times before estimation
 function StateSpace(a::arima)
     m = max(a.p,a.q + 1)
 
     A = zeros(1)
-    B = zeros(1,m + a.d)
-    B[1:a.d+1] .= 1.0
+    B = zeros(1,m)
+    B[1] = 1.0
 
-    G = zeros(m + a.d,m + a.d)
-    G[1+a.d:a.p+a.d,1 + a.d]   = a.ϕ
-    G[1+a.d:m-1+a.d,2+a.d:end] = diagm(0 => ones(m-1))
-    for i in 1:a.d
-	G[i,i:a.d+1] .= 1.0
-    end
-
-    R = zeros(m + a.d,1)
-    R[1+a.d:1+a.q+a.d] = [1.0;a.θ]
+    G = zeros(m,m)
+    G[1:a.p,1]   = a.ϕ
+    G[1:m-1,2:end] = diagm(0 => ones(m-1))
+ 
+    R = zeros(m,1)
+    R[1:1+a.q] = [1.0;a.θ]
 
     H = zeros(1,1)
     S = fill(a.σ2...,1,1)
@@ -63,7 +61,6 @@ function StateSpace(a::arima)
     StateSpace(A, B, G, R, H, S, a)
 
 end
-
 # simulate arima model. This can be done generic but MvNormal does not like zero variance
 function simulate(a::arima,T::Int64)
     Random.seed!(20)
@@ -81,30 +78,31 @@ function simulate(a::arima,T::Int64)
 	s      .= ssm.G*s + ssm.R*rand(MvNormal(ssm.S))
 	y[t,:]  = ssm.A + ssm.B*s 
     end
+
+    # above was for Δᵈy, get y now
+    for i in 1:a.d
+       y = cumsum(y, dims=1)
+    end
+
     # Discard initial draws
-    y = y[end-T+1:end]
+    y = y[end-T+1:end,:]
 
 end
 
 # Initialize arima coefficients for estimation
 function initializeCoeff(a::arima, y, nParEst)
     # use OLS results
-    dy = y
-    for i in 1:a.d
-	dy = diff(dy)
-    end
-
-    T = size(dy,1)
+    T = size(y,1)
 
     # AR Part
     X = zeros(T-a.p,a.p)
     for i in 1:a.p
-      X[:,i] = dy[a.p+1-i:end-i]
+      X[:,i] = y[a.p+1-i:end-i]
     end
-    pAR = (X'*X)\(X'*dy[a.p+1:end])
+    pAR = (X'*X)\(X'*y[a.p+1:end])
 
     # MA part : recover residuals and do OLS
-    resid = dy[a.p+1:end] - X*pAR
+    resid = y[a.p+1:end] - X*pAR
     T = size(resid,1)
     X = zeros(T-a.q,a.q)
     for i in 1:a.q
@@ -118,7 +116,14 @@ function initializeCoeff(a::arima, y, nParEst)
     return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : []]
 end
 
+function estimate(a::arima, y)
+   # difference y by a.d
+   for i in 1:a.d
+      y = diff(y, dims = 1)
+   end
 
+   _estimate(a, y)
+end
 
 
 # end

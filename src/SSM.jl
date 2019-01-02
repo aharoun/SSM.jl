@@ -13,7 +13,7 @@ include("statespace.jl")
 include("arima.jl")
 
 
-export StateSpace, ssmGeneric, nLogLike, arima, simulate, estimate 
+export StateSpace, ssmGeneric, nLogLike, arima, simulate, estimate, AbstractTimeModel 
 
 end # module
 

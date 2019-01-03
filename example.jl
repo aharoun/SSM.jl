@@ -1,10 +1,11 @@
 using Revise
 using SSM
+using Plots
 
 # Cast parametrized arima model
 # arima(p,d,q)
 
-aSim    = arima(2, 1, 1)
+aSim    = arima(2, 0, 1)
 aSim.ϕ  = [0.5, -0.3];      # AR coeff
 aSim.θ  = [0.2];            # MA coeff
 aSim.σ2 = [0.1];            # variance of error term
@@ -18,15 +19,25 @@ y = simulate(aSim, 500)
 
 # initialize arima model with empty parameters and estimate
 # all parameters with NaN will be estimated
-a = arima(2, 1, 1)
+a = arima(2, 0, 1)
 @time aEst, res, std = estimate(a, y);
 
+
 # we can also estimate a subset of parameters
-a      = arima(2, 1, 1)
+a      = arima(2, 0, 1)
 a.ϕ[1] = 0.5;                   # first AR coefficient is fixed at 0.5
 println(a)
 
-aEst, res, std = estimate(a, y)   # rest of the parameters will be estimated
+aEst, res, std = estimate(a, y);   # rest of the parameters will be estimated
+
+# Forecast for the next 10 periods
+
+s = StateSpace(aEst)
+yF, varF = forecast(s, y, 10)
+
+plot(1:20, [y[end-9:end];yF])
+plot!(10:20, [y[end];yF + sqrt.(varF)])
+plot!(10:20, [y[end];yF - sqrt.(varF)])
 
 
 #= 

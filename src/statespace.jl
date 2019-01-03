@@ -34,6 +34,7 @@ end
 
 # calculate log likelihood of whole data based on Kalman filter
 # Y is Txn matrix where T is sample length and n is the number of variables
+# TODO: To speed up, steady state solution of the Kalman filter can be used for P and F after convergence
 function nLogLike(ssm::StateSpace, y)
 
     T       = size(y,1)
@@ -46,11 +47,11 @@ function nLogLike(ssm::StateSpace, y)
     @inbounds for i in 1:T
 	# forecast
 	s .= ssm.G * s
-	P .= ssm.G * P * ssm.G' + RSR
-	F .= ssm.B * P * ssm.B' + ssm.H
+	P .= ssm.G * P * ssm.G' .+ RSR
+	F .= ssm.B * P * ssm.B' .+ ssm.H
 
-	y_fore   .= ssm.A + ssm.B * s
-	pred_err .= y[i,:] - y_fore
+	y_fore   .= ssm.A  .+ ssm.B * s
+	pred_err .= y[i,:] .- y_fore
 	try
 	    ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err)) 
 	catch
@@ -131,6 +132,48 @@ function stdErrParam(parEst,nlogl::Function)
     cov = (cov + cov')/2
     std = sqrt.(diag(cov))
 end
+
+
+
+function forecast(ssm::StateSpace, y, Tf)
+
+    T       = size(y,1)
+    s, P, F = _initializeKF(ssm,y)
+    ylogL   = zeros(T)
+    RSR     = ssm.R*ssm.S*ssm.R'
+    y_fore  = similar(ssm.A)
+    pred_err= similar(y_fore)
+
+    yForecast = zeros(Tf,size(y,2))
+    FForecast = zeros(Tf,size(y,2))
+    
+    @inbounds for i in 1:T
+	# forecast
+	s .= ssm.G * s
+	P .= ssm.G * P * ssm.G' .+ RSR
+	F .= ssm.B * P * ssm.B' .+ ssm.H
+
+
+	y_fore   .= ssm.A  .+ ssm.B * s
+	pred_err .= y[i,:] .- y_fore
+
+	# update
+	s .+=  P * ssm.B' * (F\pred_err)
+	P .-=  P * ssm.B' * (F\ssm.B)*P'
+    end
+    
+    for i in 1:Tf
+	s .= ssm.G * s
+	P .= ssm.G * P * ssm.G' .+ RSR
+	
+	yForecast[i,:] .= ssm.A .+ ssm.B * s
+	FForecast[i,:]  = ssm.B * P * ssm.B'+ ssm.H
+	#  no update
+    end
+
+    return yForecast, FForecast
+end
+
 
 # -----------------------------------------------------------------------------------------------
 

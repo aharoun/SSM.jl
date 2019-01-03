@@ -1,5 +1,5 @@
 
-# Univariate ARIMA(p,d,q) without any constant for now
+# Univariate ARIMA(p,d,q)
 mutable struct arima{T<:Real} <: AbstractTimeModel
     p :: Int64		# AR length
     d :: Int64		# Integration order
@@ -7,8 +7,9 @@ mutable struct arima{T<:Real} <: AbstractTimeModel
     ϕ :: Array{T,1}	# AR coefficients
     θ :: Array{T,1}	# MA coefficients
     σ2:: Array{T,1}	# variance of error term
+    c :: Array{T,1}	# constant term
 
-   estPar :: NTuple{3, Symbol}  # holds the fields of a model type that can be estimated
+   estPar :: NTuple{4, Symbol}  # holds the fields of a model type that can be estimated
 
 end
 
@@ -17,17 +18,23 @@ function arima(p::Int64,d::Int64,q::Int64)
     ϕ  = fill(NaN,p)
     θ  = fill(NaN,q)
     σ2 = fill(NaN,1)
-    estPar = (:ϕ, :θ, :σ2)
-    arima(p, d, q, ϕ, θ, σ2, estPar)
+     c = fill(NaN,1)
+    estPar = (:ϕ, :θ, :σ2, :c)
+
+    arima(p, d, q, ϕ, θ, σ2, c, estPar)
 end
 
 # Initialize with parameter vectors, some parameters can be set as NaN. Those can be estimated.
-function arima(ϕ::Array{T,1}, θ::Array{T,1}, σ2::Array{T,1}, d::Int64) where T
+function arima(; ϕ::Array{T,1} = [NaN], 
+	         θ::Array{T,1} = [NaN], 
+	        σ2::Array{T,1} = [NaN],
+		 c::Array{T,1} = [NaN], 
+		 d::Int64 = 0) where T
     p = length(ϕ)
     q = length(θ)
 
-    estPar = (:ϕ, :θ, :σ2)
-    arima(p, d, q, ϕ, θ, σ2, estPar)
+    estPar = (:ϕ, :θ, :σ2, :c)
+    arima(p, d, q, ϕ, θ, σ2, c, estPar)
 end
 
 function Base.show(io::IO, a::arima)
@@ -36,6 +43,7 @@ function Base.show(io::IO, a::arima)
     println(io," AR: ",a.ϕ)
     println(io," MA: ",a.θ)
     println(io," σ2: ",a.σ2)
+    println(io,"  c: ",a.c)
 end
 
 
@@ -44,7 +52,7 @@ end
 function StateSpace(a::arima)
     m = max(a.p,a.q + 1)
 
-    A = zeros(1)
+    A = a.c
     B = zeros(1,m)
     B[1] = 1.0
 
@@ -95,14 +103,17 @@ function initializeCoeff(a::arima, y, nParEst)
     T = size(y,1)
 
     # AR Part
-    X = zeros(T-a.p,a.p)
+    X = ones(T-a.p,a.p + 1)
     for i in 1:a.p
-      X[:,i] = y[a.p+1-i:end-i]
+      X[:,i+1] = y[a.p+1-i:end-i]
     end
-    pAR = (X'*X)\(X'*y[a.p+1:end])
+    coeff = (X'*X)\(X'*y[a.p+1:end])
+    
+    pc  = coeff[1]
+    pAR = coeff[2:end]
 
     # MA part : recover residuals and do OLS
-    resid = y[a.p+1:end] - X*pAR
+    resid = y[a.p+1:end] - X*coeff
     T = size(resid,1)
     X = zeros(T-a.q,a.q)
     for i in 1:a.q
@@ -113,7 +124,7 @@ function initializeCoeff(a::arima, y, nParEst)
 
     pσ2 = var(resid)
 
-    return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : []]
+    return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : []; isnan.(a.c)[1] ? pc : []]
 end
 
 function estimate(a::arima, y)

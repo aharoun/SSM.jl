@@ -68,7 +68,7 @@ function nLogLike(ssm::StateSpace, y)
 end
 
 
-# TODO : diffuse initialization 
+# TODO : initialize P based on unconditional distribution  
 function _initializeKF(ssm::StateSpace,y)
     n = size(ssm.G,1)
     s = zeros(n)

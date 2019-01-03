@@ -48,27 +48,33 @@ end
 
 
 # Cast arima model into state space
-# This is for Δᵈy, so y will be differenced d times before estimation
 function StateSpace(a::arima)
     m = max(a.p,a.q + 1)
 
-    A = a.c
-    B = zeros(1,m)
-    B[1] = 1.0
+    A = zeros(1)
+    B = zeros(1,m + a.d)
+    B[1,1:a.d+1] .= 1.0
 
-    G = zeros(m,m)
-    G[1:a.p,1]   = a.ϕ
-    G[1:m-1,2:end] = diagm(0 => ones(m-1))
- 
-    R = zeros(m,1)
-    R[1:1+a.q] = [1.0;a.θ]
+    C = zeros(m + a.d)
+    C[a.d+1]  = a.c[1]
+
+    G = zeros(m + a.d,m + a.d)
+    G[1+a.d:a.p+a.d,1 + a.d]   = a.ϕ
+    G[1+a.d:m-1+a.d,2+a.d:end] = diagm(0 => ones(m-1))
+    for i in 1:a.d
+        G[i,i:a.d+1] .= 1.0
+    end
+
+    R = zeros(m + a.d,1)
+    R[1+a.d:1+a.q+a.d] = [1.0;a.θ]
 
     H = zeros(1,1)
     S = fill(a.σ2...,1,1)
 
-    StateSpace(A, B, G, R, H, S, a)
+    StateSpace(A, B, C, G, R, H, S, a)
 
 end
+
 # simulate arima model. This can be done generic but MvNormal does not like zero variance
 function simulate(a::arima,T::Int64)
     Random.seed!(20)
@@ -83,13 +89,8 @@ function simulate(a::arima,T::Int64)
     s  = zeros(size(ssm.G,1))
 
     @inbounds for t in 1:TT
-	s      .= ssm.G*s + ssm.R*rand(MvNormal(ssm.S))
-	y[t,:]  = ssm.A + ssm.B*s 
-    end
-
-    # above was for Δᵈy, get y now
-    for i in 1:a.d
-       y = cumsum(y, dims=1)
+	s      .= ssm.C + ssm.G*s + ssm.R*rand(MvNormal(ssm.S))
+	y[t,:] .= ssm.A + ssm.B*s 
     end
 
     # Discard initial draws
@@ -100,6 +101,10 @@ end
 # Initialize arima coefficients for estimation
 function initializeCoeff(a::arima, y, nParEst)
     # use OLS results
+    for i in 1:a.d
+       y = diff(y, dims=1)
+    end
+
     T = size(y,1)
 
     # AR Part
@@ -126,15 +131,5 @@ function initializeCoeff(a::arima, y, nParEst)
 
     return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : []; isnan.(a.c)[1] ? pc : []]
 end
-
-function estimate(a::arima, y)
-   # difference y by a.d
-   for i in 1:a.d
-      y = diff(y, dims = 1)
-   end
-
-   _estimate(a, y)
-end
-
 
 # end

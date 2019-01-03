@@ -5,13 +5,14 @@ struct ssmGeneric <: AbstractTimeModel end
 
 # State Space Model representation
 # y(t) = A + B×s(t) + u
-# s(t) = G×s(t-1) + R×ep
+# s(t) = C + G×s(t-1) + R×ep
 # u  ~ N(0,H)
 # ep ~ N(0,S)
 
 struct StateSpace{T<:Real} 
     A :: Array{T,1}
     B :: Array{T,2}
+    C :: Array{T,1}
     G :: Array{T,2}
     R :: Array{T,2}
     H :: Array{T,2}
@@ -21,9 +22,9 @@ struct StateSpace{T<:Real}
 end
 
 # initialize a generic state space model
-function StateSpace(A, B, G, R, H, S)
+function StateSpace(A, B, C, G, R, H, S)
     m = ssmGeneric()
-    StateSpace(A, B, G, R, H, S, m)
+    StateSpace(A, B, C, G, R, H, S, m)
 end
 
 function Base.show(io::IO, m::StateSpace)
@@ -46,7 +47,7 @@ function nLogLike(ssm::StateSpace, y)
 
     @inbounds for i in 1:T
 	# forecast
-	s .= ssm.G * s
+	s .= ssm.C .+ ssm.G * s
 	P .= ssm.G * P * ssm.G' .+ RSR
 	F .= ssm.B * P * ssm.B' .+ ssm.H
 
@@ -69,8 +70,9 @@ end
 
 function _initializeKF(ssm::StateSpace,y)
     n = size(ssm.G,1)
-    s = zeros(n)
-    P = solveDiscreteLyapunov(ssm.G, ssm.R*ssm.S*ssm.R')
+    s = [y[1,1];zeros(n-1)]
+    #P = solveDiscreteLyapunov(ssm.G, ssm.R*ssm.S*ssm.R')  # IS THIS CORRECT WITH CONSTANT IN TRANSITION EQUATION?
+    P = zeros(n,n)
     F = similar(ssm.H) 
 
     return s, P, F
@@ -149,7 +151,7 @@ function forecast(ssm::StateSpace, y, Tf)
     
     @inbounds for i in 1:T
 	# forecast
-	s .= ssm.G * s
+	s .= ssm.C .+ ssm.G * s
 	P .= ssm.G * P * ssm.G' .+ RSR
 	F .= ssm.B * P * ssm.B' .+ ssm.H
 
@@ -163,7 +165,7 @@ function forecast(ssm::StateSpace, y, Tf)
     end
     
     for i in 1:Tf
-	s .= ssm.G * s
+	s .= ssm.C .+ ssm.G * s
 	P .= ssm.G * P * ssm.G' .+ RSR
 	
 	yForecast[i,:] .= ssm.A .+ ssm.B * s

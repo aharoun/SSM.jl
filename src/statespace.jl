@@ -3,13 +3,11 @@ abstract type AbstractTimeModel end
 
 struct ssmGeneric <: AbstractTimeModel end
 
-
-
-#  Model representation
-#  y_{t} = A + B s_{t} + u
-#  s_{t} = G s_{t-1} + R*ep
-#  var(u) ~ H
-#  var(ep) ~ S
+# State Space Model representation
+# y(t) = A + B×s(t) + u
+# s(t) = G×s(t-1) + R×ep
+# u  ~ N(0,H)
+# ep ~ N(0,S)
 
 struct StateSpace{T<:Real} 
     A :: Array{T,1}
@@ -54,9 +52,9 @@ function nLogLike(ssm::StateSpace, y)
 	y_fore   .= ssm.A + ssm.B * s
 	pred_err .= y[i,:] - y_fore
 	try
-	    ylogL[i]= (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
+	    ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err)) 
 	catch
-	    ylogL    += 1.0e8
+	    ylogL    = 1.0e8
 	    break
 	end
 	# update
@@ -118,7 +116,7 @@ end
 
 function setEstParam!(x, a, estPIndex)
     count = 1
-    @inbounds for (i, valF) in enumerate(a.estPar)
+    @inbounds for (i, valF) in enumerate(a.estimableParamField)
 		  for j in estPIndex[i]
 		      getproperty(a, valF)[j] = x[count]
 			  count+=1
@@ -143,7 +141,7 @@ function initializeCoeff(a::AbstractTimeModel, y, nParEst)
 end
 
 
-findEstParamIndex(a::AbstractTimeModel) = [findall(isnan, getfield(a,fn))  for fn in a.estPar]
+findEstParamIndex(a::AbstractTimeModel) = [findall(isnan, getfield(a,fn))  for fn in a.estimableParamField]
 
 # Solve discrete Lyapunov equation AXA' - X + B = 0.
 function solveDiscreteLyapunov(A::Array{T,2}, B::Array{T,2}) where T

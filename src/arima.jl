@@ -9,7 +9,7 @@ mutable struct arima{T<:Real} <: AbstractTimeModel
     σ2:: Array{T,1}	# variance of error term
     c :: Array{T,1}	# constant term
 
-   estPar :: NTuple{4, Symbol}  # holds the fields of a model type that can be estimated
+    estimableParamField :: NTuple{4, Symbol}  # holds the fields of a model type that can be estimated
 
 end
 
@@ -19,9 +19,9 @@ function arima(p::Int64,d::Int64,q::Int64)
     θ  = fill(NaN,q)
     σ2 = fill(NaN,1)
      c = fill(NaN,1)
-    estPar = (:ϕ, :θ, :σ2, :c)
+    estimableParamField = (:ϕ, :θ, :σ2, :c)
 
-    arima(p, d, q, ϕ, θ, σ2, c, estPar)
+    arima(p, d, q, ϕ, θ, σ2, c, estimableParamField)
 end
 
 # Initialize with parameter vectors, some parameters can be set as NaN. Those can be estimated.
@@ -33,8 +33,8 @@ function arima(; ϕ::Array{T,1} = [NaN],
     p = length(ϕ)
     q = length(θ)
 
-    estPar = (:ϕ, :θ, :σ2, :c)
-    arima(p, d, q, ϕ, θ, σ2, c, estPar)
+    estimableParamField = (:ϕ, :θ, :σ2, :c)
+    arima(p, d, q, ϕ, θ, σ2, c, estimableParamField)
 end
 
 function Base.show(io::IO, a::arima)

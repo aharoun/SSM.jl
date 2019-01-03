@@ -68,11 +68,10 @@ function nLogLike(ssm::StateSpace, y)
 end
 
 
-# TODO : initialize P based on unconditional distribution  
 function _initializeKF(ssm::StateSpace,y)
     n = size(ssm.G,1)
     s = zeros(n)
-    P = zeros(n,n)
+    P = solveDiscreteLyapunov(ssm.G, ssm.R*ssm.S*ssm.R')
     F = similar(ssm.H) 
 
     return s, P, F
@@ -145,6 +144,13 @@ end
 
 
 findEstParamIndex(a::AbstractTimeModel) = [findall(isnan, getfield(a,fn))  for fn in a.estPar]
+
+# Solve discrete Lyapunov equation AXA' - X + B = 0.
+function solveDiscreteLyapunov(A::Array{T,2}, B::Array{T,2}) where T
+    aux = I - kron(A, A)
+    sol = aux\vec(B)
+    return reshape(sol,size(B))
+end
 
 
 # end

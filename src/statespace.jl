@@ -153,8 +153,11 @@ function _estimate(a::AbstractTimeModel, y)
     stdErr = stdErrParam(res.minimizer, x -> negLogLike!(x, a, y, estPIndex))
 
     negLogLike!(res.minimizer, a, y, estPIndex)    # to cast the model parameters at minimizer
-
-    return a, res, stdErr
+    
+    resTable = NamedArray([res.minimizer stdErr])
+    setnames!(resTable, ["Point Est.", "Std. Error"], 2)
+    resTable.dimnames = ("Parameters", "")
+    return a, resTable
 end
 
 function estimate(a::AbstractTimeModel, y)
@@ -173,7 +176,7 @@ function setEstParam!(x, a, estPIndex)
     @inbounds for (i, valF) in enumerate(a.estimableParamField)
 		  for j in estPIndex[i]
 		      getproperty(a, valF)[j] = x[count]
-			  count+=1
+		      count += 1
 	          end
 	      end
 end
@@ -181,9 +184,9 @@ end
 # Standard error of the estimated parameters, based on outer product of score
 function stdErrParam(parEst,nlogl::Function)
     score  = Calculus.jacobian(nlogl, parEst, :central)
-    cov = pinv(score'*score)
-    cov = (cov + cov')/2
-    std = sqrt.(diag(cov))
+    cov    = pinv(score'*score)
+    cov    = (cov + cov')/2
+    std    = sqrt.(diag(cov))
 end
 
 

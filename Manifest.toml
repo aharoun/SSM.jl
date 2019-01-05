@@ -19,6 +19,12 @@ git-tree-sha1 = "f60954495a7afcee4136f78d1d60350abd37a409"
 uuid = "49dc2e85-a5d0-5ad3-a950-438e2897f1b9"
 version = "0.4.1"
 
+[[Combinatorics]]
+deps = ["LinearAlgebra", "Polynomials", "Test"]
+git-tree-sha1 = "50b3ae4d643dc27eaff69fb6be06ee094d5500c9"
+uuid = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
+version = "0.7.0"
+
 [[CommonSubexpressions]]
 deps = ["Test"]
 git-tree-sha1 = "efdaf19ab11c7889334ca247ff4c9f7c322817b0"
@@ -124,6 +130,12 @@ git-tree-sha1 = "ce3b85e484a5d4c71dd5316215069311135fa9f2"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "0.3.2"
 
+[[NamedArrays]]
+deps = ["Combinatorics", "DataStructures", "DelimitedFiles", "LinearAlgebra", "Random", "Requires", "SparseArrays", "Statistics", "Test"]
+git-tree-sha1 = "977c65d68cee14ab28198e89ebc125d0738ef250"
+uuid = "86f7a689-2022-50b4-a561-43c23ac3c673"
+version = "0.9.2"
+
 [[Optim]]
 deps = ["Calculus", "DiffEqDiffTools", "ForwardDiff", "LineSearches", "LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "PositiveFactorizations", "Printf", "Random", "SparseArrays", "StatsBase", "Test"]
 git-tree-sha1 = "0f2a6c6ff9db396cc7af15bb1cf057a26662ff17"
@@ -146,6 +158,12 @@ version = "0.10.3"
 deps = ["Dates", "LibGit2", "Markdown", "Printf", "REPL", "Random", "SHA", "UUIDs"]
 uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 
+[[Polynomials]]
+deps = ["LinearAlgebra", "SparseArrays", "Test"]
+git-tree-sha1 = "1a1eae52956658a6acae6fa1b6d6c3d488192895"
+uuid = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
+version = "0.5.1"
+
 [[PositiveFactorizations]]
 deps = ["LinearAlgebra", "Test"]
 git-tree-sha1 = "86ae7329c4b5c266acf5c7c524a972300d991e1c"
@@ -163,6 +181,12 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [[Random]]
 deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[Requires]]
+deps = ["Test"]
+git-tree-sha1 = "f6fbf4ba64d295e146e49e021207993b6b48c7d1"
+uuid = "ae029012-a4dd-5104-9daa-d747884805df"
+version = "0.5.2"
 
 [[Revise]]
 deps = ["Distributed", "FileWatching", "InteractiveUtils", "LibGit2", "OrderedCollections", "Pkg", "REPL", "Random", "Test", "UUIDs", "Unicode"]

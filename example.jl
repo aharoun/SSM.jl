@@ -17,13 +17,14 @@ println(aSim)
 
 # simulate arima with sample size 500 with optional random number generator seed = seed
 # here we can also pass a StateSpace object directly
-Random.seed!(2017);    # fixing seed for reproducibility
+Random.seed!(2);    # fixing seed for reproducibility
 y = simulate(aSim, 500)
 
 # initialize arima model with empty parameters and estimate
 # all parameters with NaN will be estimated
 a = arima(2, 1, 1)
-aEst, res, std = estimate(a, y);
+@btime aEst, estParams = estimate(a, y);
+# it returns model object with estimated parameters and table summarizing the results
 
 
 # we can also estimate a subset of parameters
@@ -65,7 +66,7 @@ function StateSpace(a :: newModel)
 	... map model `a` parameters to state space matrices
 	...
 
-	StateSpace(A, B, C, G, R, H, S,x0, P0 a)
+	StateSpace(A, B, C, G, R, H, S, x0, P0, a)
 end
 
   State Space Model representation

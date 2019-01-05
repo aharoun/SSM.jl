@@ -2,8 +2,9 @@ module SSM
 
 using LinearAlgebra
 using Optim
-using Statistics
+using Statistics: var
 using Calculus
+using NamedArrays
 
 import Base.show
 

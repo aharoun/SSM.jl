@@ -71,30 +71,25 @@ function StateSpace(a::arima)
     H = zeros(1,1)
     S = fill(a.σ2...,1,1)
 
-    StateSpace(A, B, C, G, R, H, S, a)
-
-end
-# Initialize kalman filter specific to arima models
-function initializeKF(a::arima, y)
-    ssm = StateSpace(a)
-    n = size(ssm.G,1)
 
     # initialize non stationary states at zero with large variance, stationary states at their unconditional mean and
     # covariance
-    s = zeros(n)
-    s[a.d+1:end] = (I - ssm.G[a.d+1:end,a.d+1:end])\ssm.C[a.d+1:end]
-    # initialize stationary part based on unconditional dist, nonstationary part at zero
-    RSR = ssm.R*ssm.S*ssm.R'
-    P   = zeros(n,n)
+    nG = size(G,1)
+
+    x0 = zeros(nG)
+    x0[a.d+1:end] = (I - G[a.d+1:end,a.d+1:end])\C[a.d+1:end]
+
+    RSR = R*S*R'
+    P0   = zeros(nG,nG)
     for i in 1:a.d
-       P[i,i] = 1.0e8 
+       P0[i,i] = 1.0e8 
     end
-    P[1+a.d:end, 1+a.d:end] .= solveDiscreteLyapunov(ssm.G[1+a.d:end,1+a.d:end], RSR[1+a.d:end,1+a.d:end])
+    P0[1+a.d:end, 1+a.d:end] .= solveDiscreteLyapunov(G[1+a.d:end,1+a.d:end], RSR[1+a.d:end,1+a.d:end])
 
-    F = similar(ssm.H)
+    StateSpace(A, B, C, G, R, H, S, x0, P0, a)
 
-    return s, P, F
 end
+
 
 # Initialize arima coefficients for estimation
 function initializeCoeff(a::arima, y, nParEst)

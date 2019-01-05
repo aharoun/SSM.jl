@@ -16,6 +16,7 @@ println(aSim)
 # aSim = arima(ϕ = [NaN, 0.1], θ = [0.2], σ2 = [0.1], c = [0.2], d = 1)
 
 # simulate arima with sample size 500 with optional random number generator seed = seed
+# here we can also pass a StateSpace object directly
 Random.seed!(2017);    # fixing seed for reproducibility
 y = simulate(aSim, 500)
 
@@ -54,7 +55,7 @@ mutable struct newModel{T} <: AbstractTimeModel
 	estimableParamField ::  NTuple{2, Symbol} = (:par1, :par2)
 end
 
-The last field `estimableParamField` is required to indicate which fields of the model type are estimable. 
+The last field `estimableParamField` is required to indicate which fields of the model type are estimable. These are the fields that `estimate` routine consider as estimable.
 We can fix some of the entries of `par1` and `par2` and leave others as NaN. The ones with NaN will be considered as unknown and wil be estimated when the model is passed to `estimate`.
 
 We also need to create a mapping from our model to its state space representation via `StateSpace`.
@@ -64,7 +65,7 @@ function StateSpace(a :: newModel)
 	... map model `a` parameters to state space matrices
 	...
 
-	StateSpace(A, B, C, G, R, H, S, a)
+	StateSpace(A, B, C, G, R, H, S,x0, P0 a)
 end
 
   State Space Model representation
@@ -72,9 +73,9 @@ end
   s(t) = C + G×s(t-1) + R×ep
   u  ~ N(0,H)
   ep ~ N(0,S)
+  s(0) ~ N(x0,P0)
 
-
-Now, like arima example, initialize an instance of the model, fix some of the parameters if you like, then pass it to
+Now, like arima example, initialize an instance of the model, simulate it, fix some of the parameters if you like, then pass it to
 `estimate` with some data. Hopefully it will estimate.
 
 =#

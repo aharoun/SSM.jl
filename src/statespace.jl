@@ -8,7 +8,9 @@ struct ssmGeneric <: AbstractTimeModel end
 # s(t) = C + G×s(t-1) + R×ep
 # u  ~ N(0,H)
 # ep ~ N(0,S)
+# s(0) ~ N(x0,P0)
 
+# TODO: dimension checking
 struct StateSpace{T<:Real} 
     A :: Array{T,1}
     B :: Array{T,2}
@@ -17,14 +19,29 @@ struct StateSpace{T<:Real}
     R :: Array{T,2}
     H :: Array{T,2}
     S :: Array{T,2}
+    x0:: Array{T,1}
+    P0:: Array{T,2} 
 
     model :: AbstractTimeModel
+
 end
 
-# initialize a generic state space model
+# initialize a generic state space model and calculate x0 and P0 based on unconditional distribution
 function StateSpace(A, B, C, G, R, H, S)
+
+    n = size(G,1)
+
+    if maximum(abs.(eigvals(G)))>=0.9999
+	warning("State space representation is nonstationary. All states will be initialized in a diffuse way.")
+	x0 = zeros(n)
+	P0 = diagm(0 => ones(n) * 1.0e8)
+    else
+	s0 = (I - ssm.G)\ssm.C
+	P0 = solveDiscreteLyapunov(ssm.G, ssm.R*ssm.S*ssm.R')
+    end
+
     m = ssmGeneric()
-    StateSpace(A, B, C, G, R, H, S, m)
+    StateSpace(A, B, C, G, R, H, S, x0, P0, m)
 end
 
 function Base.show(io::IO, m::StateSpace)
@@ -33,21 +50,15 @@ end
 
 # -----------------------------------------------------------------------------------------------
 
-# simulate arima model.
-function simulate(a::AbstractTimeModel, T::Int64)
-
-    ssm = StateSpace(a)
-    if !all(isempty.(findEstParamIndex(a)))
-      throw("Some parameters are not defined!")
-    end
-    
+# simulate model
+function simulate(ssm::StateSpace, T::Int64)
     TT = Int64(round(T*1.5))
     y = zeros(length(ssm.A),TT)
-    
+
     nG = size(ssm.G,1)
     nS = size(ssm.S,1)
     nH = size(ssm.H,1)
-    
+
     s  = zeros(nG)
     cholS = all(ssm.S .== 0.0) ? ssm.S : cholesky(ssm.S).L
     cholH = all(ssm.H .== 0.0) ? ssm.H : cholesky(ssm.H).L
@@ -63,6 +74,14 @@ function simulate(a::AbstractTimeModel, T::Int64)
 
 end
 
+function simulate(a::AbstractTimeModel, T)
+    ssm = StateSpace(a)
+    if !all(isempty.(findEstParamIndex(a)))
+      throw("Some parameters are not defined!")
+    end
+
+    simulate(ssm, T)
+end
 #--------------------------------------------------------------------------------------------------------------
 # calculate log likelihood of whole data based on Kalman filter
 # Y is Txn matrix where T is sample length and n is the number of variables
@@ -72,7 +91,9 @@ function nLogLike(a::AbstractTimeModel, y)
     ssm = StateSpace(a)
 
     T       = size(y,1)
-    s, P, F = initializeKF(a,y)
+    s       = ssm.x0
+    P       = ssm.P0
+    F       = similar(ssm.H)
     ylogL   = zeros(T)
     RSR     = ssm.R*ssm.S*ssm.R'
     y_fore  = similar(ssm.A)
@@ -108,25 +129,6 @@ function nLogLike(a::AbstractTimeModel, y)
     return ylogL
 end
 
-
-function initializeKF(a::AbstractTimeModel, y)
-    ssm = StateSpace(a)
-
-    n = size(ssm.G,1)
-
-    if maximum(abs.(eigvals(ssm.G)))>=0.999
-	warning("State space representation is nonstationary. You may want to initialize Kalman filter specific to your model.")
-	s = zeros(n)
-	P = diagm(0 => ones(n) * 1.0e8)
-    else
-	s = (I - ssm.G)\ssm.C
-	P = solveDiscreteLyapunov(ssm.G, ssm.R*ssm.S*ssm.R')
-    end
-    
-    F = similar(ssm.H)
-
-    return s, P, F
-end
 
 # -----------------------------------------------------------------------------------------------
 
@@ -191,7 +193,9 @@ function forecast(a::AbstractTimeModel, y, Tf)
     ssm = StateSpace(a)
 
     T       = size(y,1)
-    s, P, F = initializeKF(a, y)
+    s       = ssm.x0
+    P       = ssm.P0
+    F       = similar(ssm.H)
     ylogL   = zeros(T)
     RSR     = ssm.R*ssm.S*ssm.R'
     y_fore  = similar(ssm.A)
@@ -213,7 +217,7 @@ function forecast(a::AbstractTimeModel, y, Tf)
 	s .+=  P * ssm.B' * (F\pred_err)
 	P .-=  P * ssm.B' * (F\ssm.B)*P'
     end
-    
+
     for i in 1:Tf
 	s .= ssm.C .+ ssm.G * s
 	P .= ssm.G * P * ssm.G' .+ RSR

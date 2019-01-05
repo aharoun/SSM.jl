@@ -33,6 +33,37 @@ end
 
 # -----------------------------------------------------------------------------------------------
 
+# simulate arima model.
+function simulate(a::AbstractTimeModel, T::Int64)
+
+    ssm = StateSpace(a)
+    if !all(isempty.(findEstParamIndex(a)))
+      throw("Some parameters are not defined!")
+    end
+    
+    TT = Int64(round(T*1.5))
+    y = zeros(length(ssm.A),TT)
+    
+    nG = size(ssm.G,1)
+    nS = size(ssm.S,1)
+    nH = size(ssm.H,1)
+    
+    s  = zeros(nG)
+    cholS = all(ssm.S .== 0.0) ? ssm.S : cholesky(ssm.S).L
+    cholH = all(ssm.H .== 0.0) ? ssm.H : cholesky(ssm.H).L
+
+    @inbounds for t in 1:TT
+	s      .= ssm.C + ssm.G*s + ssm.R*cholS*randn(nS)
+	y[:,t] .= ssm.A + ssm.B*s + cholH*randn(nH)
+    end
+
+    y = y'
+    # Discard initial draws
+    y = y[end-T+1:end,:]
+
+end
+
+#--------------------------------------------------------------------------------------------------------------
 # calculate log likelihood of whole data based on Kalman filter
 # Y is Txn matrix where T is sample length and n is the number of variables
 # TODO: To speed up, steady state solution of the Kalman filter can be used for P and F after convergence
@@ -155,7 +186,7 @@ end
 
 
 
-function forecast(a::StateSpace, y, Tf)
+function forecast(a::AbstractTimeModel, y, Tf)
 
     ssm = StateSpace(a)
 

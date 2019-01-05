@@ -74,36 +74,13 @@ function StateSpace(a::arima)
     StateSpace(A, B, C, G, R, H, S, a)
 
 end
-
-# simulate arima model. This can be done generic but MvNormal does not like zero variance
-function simulate(a::arima,T::Int64)
-    Random.seed!(20)
-    ssm = StateSpace(a)
-    if !all(isempty.(findEstParamIndex(a)))
-      throw("Some parameters are not defined!")
-    end
-
-    TT = Int64(round(T*1.5))
-    y = zeros(TT,length(ssm.A))
-
-    s  = zeros(size(ssm.G,1))
-
-    @inbounds for t in 1:TT
-	s      .= ssm.C + ssm.G*s + ssm.R*rand(MvNormal(ssm.S))
-	y[t,:] .= ssm.A + ssm.B*s 
-    end
-
-    # Discard initial draws
-    y = y[end-T+1:end,:]
-
-end
-
 # Initialize kalman filter specific to arima models
 function initializeKF(a::arima, y)
     ssm = StateSpace(a)
-    yy = copy(y)
     n = size(ssm.G,1)
 
+    # initialize non stationary states at zero with large variance, stationary states at their unconditional mean and
+    # covariance
     s = zeros(n)
     s[a.d+1:end] = (I - ssm.G[a.d+1:end,a.d+1:end])\ssm.C[a.d+1:end]
     # initialize stationary part based on unconditional dist, nonstationary part at zero

@@ -115,7 +115,7 @@ function nLogLike(a::AbstractTimeModel, y)
 	try
 	    ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err)) 
 	catch
-	    ylogL    = -Inf
+	    ylogL[i] = -Inf
 	    break
 	end
 	# update
@@ -139,14 +139,13 @@ Estimates time series model. All the entries of the estimable parameters with Na
 """
 function _estimate(a::AbstractTimeModel, y)
     a = deepcopy(a)
-
     estPIndex = findEstParamIndex(a)
     nParEst   = length(vcat(estPIndex...))
 
     pInit = initializeCoeff(a, y, nParEst)
+   
 
-    objFun = x -> sum(negLogLike!(x, a, y, estPIndex))
-    res    = optimize(objFun,
+    res    = optimize(x -> sum(negLogLike!(x, a, y, estPIndex)),
 		      pInit,
 		      Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
 
@@ -157,7 +156,7 @@ function _estimate(a::AbstractTimeModel, y)
     resTable = NamedArray([res.minimizer stdErr])
     setnames!(resTable, ["Point Est.", "Std. Error"], 2)
     resTable.dimnames = ("Parameters", "")
-    return a, resTable
+    return a, resTable, res
 end
 
 function estimate(a::AbstractTimeModel, y)
@@ -204,8 +203,8 @@ function forecast(a::AbstractTimeModel, y, Tf)
     y_fore  = similar(ssm.A)
     pred_err= similar(y_fore)
 
-    yForecast = zeros(Tf,size(y,2))
-    FForecast = zeros(Tf,size(y,2))
+    yForecast = zeros(size(y,2),Tf)
+    FForecast = zeros(size(y,2),Tf)
 
     @inbounds for i in 1:T
 	# forecast
@@ -225,12 +224,12 @@ function forecast(a::AbstractTimeModel, y, Tf)
 	s .= ssm.C .+ ssm.G * s
 	P .= ssm.G * P * ssm.G' .+ RSR
 	
-	yForecast[i,:] .= ssm.A .+ ssm.B * s
-	FForecast[i,:]  = ssm.B * P * ssm.B'+ ssm.H
+	yForecast[:,i] .= ssm.A .+ ssm.B * s
+	FForecast[:,i] .= diag(ssm.B * P * ssm.B' .+ ssm.H)
 	#  no update
     end
 
-    return yForecast, FForecast
+    return yForecast', FForecast'
 end
 
 
@@ -243,7 +242,7 @@ function initializeCoeff(a::AbstractTimeModel, y, nParEst)
 end
 
 
-findEstParamIndex(a::AbstractTimeModel) = [findall(isnan, getfield(a,fn))  for fn in a.estimableParamField]
+findEstParamIndex(a::AbstractTimeModel)::Array{Array{Int64,1},1} = [findall(isnan, getfield(a,fn))  for fn in a.estimableParamField]
 
 # Solve discrete Lyapunov equation AXA' - X + B = 0.
 function solveDiscreteLyapunov(A::Array{T,2}, B::Array{T,2}) where T

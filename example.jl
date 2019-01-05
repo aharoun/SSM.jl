@@ -23,7 +23,7 @@ y = simulate(aSim, 500)
 # initialize arima model with empty parameters and estimate
 # all parameters with NaN will be estimated
 a = arima(2, 1, 1)
-@btime aEst, estParams = estimate(a, y);
+aEst, estParams, res = estimate(a, y);
 # it returns model object with estimated parameters and table summarizing the results
 
 

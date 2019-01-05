@@ -86,49 +86,63 @@ end
 # calculate log likelihood of whole data based on Kalman filter
 # Y is Txn matrix where T is sample length and n is the number of variables
 # TODO: To speed up, steady state solution of the Kalman filter can be used for P and F after convergence
+
 function nLogLike(a::AbstractTimeModel, y)
 
     ssm = StateSpace(a)
 
     T       = size(y,1)
-    s       = ssm.x0
-    P       = ssm.P0
+    s       = copy(ssm.x0)
+    P       = copy(ssm.P0)
+    sF      = similar(s)
+    PF      = similar(P)
+    copyP   = similar(P)
     F       = similar(ssm.H)
     ylogL   = zeros(T)
     RSR     = ssm.R*ssm.S*ssm.R'
     y_fore  = similar(ssm.A)
     pred_err= similar(y_fore)
 
-    @inbounds for i in 1:T
+    converged = false
+    i = 1
+
+    @inbounds while i<=T && !converged
 	# forecast
-	s .= ssm.C .+ ssm.G * s
-	P .= ssm.G * P * ssm.G' .+ RSR
-	# robustify
-	# P[abs.(P).<1.0e-20] .= 0.0
-	# P .= 0.5.*(P .+ P')
-
-	F .= ssm.B * P * ssm.B' .+ ssm.H
-	# F .= 0.5*(F .+ F')
-
-	y_fore   .= ssm.A  .+ ssm.B * s
-	pred_err .= y[i,:] .- y_fore
-	try
-	    ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err)) 
-	catch
-	    ylogL[i] = -Inf
-	    break
-	end
-	# update
-	s .+=  P * ssm.B' * (F\pred_err)
-	P .-=  P * ssm.B' * (F\ssm.B)*P'
+	sF .= ssm.C .+ ssm.G * s
+	PF.= ssm.G * P * ssm.G' .+ RSR
 	
-	# P[abs.(P).<1.0e-20] .= 0.0
-	# P .= 0.5.*(P .+ P')
+	F .= ssm.B * PF * ssm.B' .+ ssm.H
+
+	y_fore   .= ssm.A  .+ ssm.B * sF
+	pred_err .= y[i,:] .- y_fore
+	ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
+	# update
+	s .= sF .+ PF * ssm.B' * (F\pred_err)
+	P .= PF .-  PF * ssm.B' * (F\ssm.B)*PF'
+	
+	# break if P, PF and F are converged, go to the second stage
+	maximum(abs.(P .- copyP))<1.0e-18 ? converged = true : nothing
+	
+	copyP = copy(P)
+
+	i += 1
+    end
+
+
+    @inbounds for j in i:T
+        # forecast
+	sF       .= ssm.C .+ ssm.G * s
+	y_fore   .= ssm.A  .+ ssm.B * sF
+	
+	pred_err .= y[j,:] .- y_fore
+	ylogL[j] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err)) 
+	
+	## update
+	s .= sF .+ PF * ssm.B' * (F\pred_err)	
     end
 
     return ylogL
 end
-
 
 # -----------------------------------------------------------------------------------------------
 
@@ -145,9 +159,9 @@ function _estimate(a::AbstractTimeModel, y)
     pInit = initializeCoeff(a, y, nParEst)
    
 
-    res    = optimize(x -> sum(negLogLike!(x, a, y, estPIndex)),
-		      pInit,
-		      Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
+    res = optimize(x -> sum(negLogLike!(x, a, y, estPIndex)),
+		   pInit,
+		   Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
 
     stdErr = stdErrParam(res.minimizer, x -> negLogLike!(x, a, y, estPIndex))
 

@@ -14,7 +14,7 @@ include("arima.jl")
 
 
 export StateSpace, AbstractTimeModel, ssmGeneric, arima,
-       nLogLike, arima, simulate, estimate, forecast
+nLogLike, arima, simulate, estimate, forecast,initializeKF
 
 end # module
 

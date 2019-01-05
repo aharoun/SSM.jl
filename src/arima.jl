@@ -98,27 +98,49 @@ function simulate(a::arima,T::Int64)
 
 end
 
+# Initialize kalman filter specific to arima models
+function initializeKF(a::arima, y)
+    ssm = StateSpace(a)
+    yy = copy(y)
+    n = size(ssm.G,1)
+
+    s = zeros(n)
+    s[a.d+1:end] = (I - ssm.G[a.d+1:end,a.d+1:end])\ssm.C[a.d+1:end]
+    # initialize stationary part based on unconditional dist, nonstationary part at zero
+    RSR = ssm.R*ssm.S*ssm.R'
+    P   = zeros(n,n)
+    for i in 1:a.d
+       P[i,i] = 1.0e8 
+    end
+    P[1+a.d:end, 1+a.d:end] .= solveDiscreteLyapunov(ssm.G[1+a.d:end,1+a.d:end], RSR[1+a.d:end,1+a.d:end])
+
+    F = similar(ssm.H)
+
+    return s, P, F
+end
+
 # Initialize arima coefficients for estimation
 function initializeCoeff(a::arima, y, nParEst)
     # use OLS results
+    dy = copy(y)
     for i in 1:a.d
-       y = diff(y, dims=1)
+       dy = diff(dy, dims=1)
     end
 
-    T = size(y,1)
+    T = size(dy,1)
 
     # AR Part
     X = ones(T-a.p,a.p + 1)
     for i in 1:a.p
-      X[:,i+1] = y[a.p+1-i:end-i]
+      X[:,i+1] = dy[a.p+1-i:end-i]
     end
-    coeff = (X'*X)\(X'*y[a.p+1:end])
+    coeff = (X'*X)\(X'*dy[a.p+1:end])
     
     pc  = coeff[1]
     pAR = coeff[2:end]
 
     # MA part : recover residuals and do OLS
-    resid = y[a.p+1:end] - X*coeff
+    resid = dy[a.p+1:end] - X*coeff
     T = size(resid,1)
     X = zeros(T-a.q,a.q)
     for i in 1:a.q
@@ -129,7 +151,10 @@ function initializeCoeff(a::arima, y, nParEst)
 
     pσ2 = var(resid)
 
-    return  [pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : []; isnan.(a.c)[1] ? pc : []]
-end
+    parInit = vcat([pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : [] ; isnan.(a.c)[1] ? pc : [] ]...)
+
+    return parInit
+ end
 
 # end
+

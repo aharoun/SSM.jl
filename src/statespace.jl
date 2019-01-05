@@ -36,10 +36,12 @@ end
 # calculate log likelihood of whole data based on Kalman filter
 # Y is Txn matrix where T is sample length and n is the number of variables
 # TODO: To speed up, steady state solution of the Kalman filter can be used for P and F after convergence
-function nLogLike(ssm::StateSpace, y)
+function nLogLike(a::AbstractTimeModel, y)
+
+    ssm = StateSpace(a)
 
     T       = size(y,1)
-    s, P, F = _initializeKF(ssm,y)
+    s, P, F = initializeKF(a,y)
     ylogL   = zeros(T)
     RSR     = ssm.R*ssm.S*ssm.R'
     y_fore  = similar(ssm.A)
@@ -49,31 +51,48 @@ function nLogLike(ssm::StateSpace, y)
 	# forecast
 	s .= ssm.C .+ ssm.G * s
 	P .= ssm.G * P * ssm.G' .+ RSR
+	# robustify
+	# P[abs.(P).<1.0e-20] .= 0.0
+	# P .= 0.5.*(P .+ P')
+
 	F .= ssm.B * P * ssm.B' .+ ssm.H
+	# F .= 0.5*(F .+ F')
 
 	y_fore   .= ssm.A  .+ ssm.B * s
 	pred_err .= y[i,:] .- y_fore
 	try
 	    ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err)) 
 	catch
-	    ylogL    = 1.0e8
+	    ylogL    = -Inf
 	    break
 	end
 	# update
 	s .+=  P * ssm.B' * (F\pred_err)
 	P .-=  P * ssm.B' * (F\ssm.B)*P'
+	
+	# P[abs.(P).<1.0e-20] .= 0.0
+	# P .= 0.5.*(P .+ P')
     end
 
     return ylogL
 end
 
 
-function _initializeKF(ssm::StateSpace,y)
+function initializeKF(a::AbstractTimeModel, y)
+    ssm = StateSpace(a)
+
     n = size(ssm.G,1)
-    s = [y[1,1];zeros(n-1)]
-    #P = solveDiscreteLyapunov(ssm.G, ssm.R*ssm.S*ssm.R')  # IS THIS CORRECT WITH CONSTANT IN TRANSITION EQUATION?
-    P = zeros(n,n)
-    F = similar(ssm.H) 
+
+    if maximum(abs.(eigvals(ssm.G)))>=0.999
+	warning("State space representation is nonstationary. You may want to initialize Kalman filter specific to your model.")
+	s = zeros(n)
+	P = diagm(0 => ones(n) * 1.0e8)
+    else
+	s = (I - ssm.G)\ssm.C
+	P = solveDiscreteLyapunov(ssm.G, ssm.R*ssm.S*ssm.R')
+    end
+    
+    F = similar(ssm.H)
 
     return s, P, F
 end
@@ -96,11 +115,11 @@ function _estimate(a::AbstractTimeModel, y)
     objFun = x -> sum(negLogLike!(x, a, y, estPIndex))
     res    = optimize(objFun,
 		      pInit,
-		      Optim.Options(g_tol = 1.0e-12, iterations = 1000, store_trace = false, show_trace = false))
+		      Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
 
     stdErr = stdErrParam(res.minimizer, x -> negLogLike!(x, a, y, estPIndex))
 
-    negLogLike!(res.minimizer, a, y, estPIndex)    # to cast ssm at minimizer
+    negLogLike!(res.minimizer, a, y, estPIndex)    # to cast the model parameters at minimizer
 
     return a, res, stdErr
 end
@@ -111,10 +130,9 @@ end
 
 # objective function for `estimate`
 function negLogLike!(x, a::AbstractTimeModel, y, estPIndex)
-    setEstParam!(x, a::AbstractTimeModel, estPIndex)
-    ssm = StateSpace(a)
+    setEstParam!(x, a, estPIndex)
     # more checks needed
-    ssm.S[1]<0.0 ? 1.0e8 : -nLogLike(ssm, y)
+    -nLogLike(a, y)
 end
 
 function setEstParam!(x, a, estPIndex)
@@ -137,10 +155,12 @@ end
 
 
 
-function forecast(ssm::StateSpace, y, Tf)
+function forecast(a::StateSpace, y, Tf)
+
+    ssm = StateSpace(a)
 
     T       = size(y,1)
-    s, P, F = _initializeKF(ssm,y)
+    s, P, F = initializeKF(a, y)
     ylogL   = zeros(T)
     RSR     = ssm.R*ssm.S*ssm.R'
     y_fore  = similar(ssm.A)
@@ -148,13 +168,12 @@ function forecast(ssm::StateSpace, y, Tf)
 
     yForecast = zeros(Tf,size(y,2))
     FForecast = zeros(Tf,size(y,2))
-    
+
     @inbounds for i in 1:T
 	# forecast
 	s .= ssm.C .+ ssm.G * s
 	P .= ssm.G * P * ssm.G' .+ RSR
 	F .= ssm.B * P * ssm.B' .+ ssm.H
-
 
 	y_fore   .= ssm.A  .+ ssm.B * s
 	pred_err .= y[i,:] .- y_fore

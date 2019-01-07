@@ -15,7 +15,7 @@ println(aSim)
 # or use arima(ϕ, θ, σ², c, d) notation
 # aSim = arima(ϕ = [NaN, 0.1], θ = [0.2], σ2 = [0.1], c = [0.2], d = 1)
 
-# simulate arima with sample size 500 with optional random number generator seed = seed
+# simulate arima with sample size 500
 # here we can also pass a StateSpace object directly
 Random.seed!(2);    # fixing seed for reproducibility
 y = simulate(aSim, 500)
@@ -23,7 +23,7 @@ y = simulate(aSim, 500)
 # initialize arima model with empty parameters and estimate
 # all parameters with NaN will be estimated
 a = arima(2, 1, 1)
-aEst, estParams, res = estimate(a, y);
+@time aEst, estParams, res = estimate(a, y);
 # it returns model object with estimated parameters and table summarizing the results
 
 

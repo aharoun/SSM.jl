@@ -82,7 +82,7 @@ function StateSpace(a::arima)
     RSR = R*S*R'
     P0   = zeros(nG,nG)
     for i in 1:a.d
-       P0[i,i] = 1.0e8 
+       P0[i,i] = 1.0e9 
     end
     P0[1+a.d:end, 1+a.d:end] .= solveDiscreteLyapunov(G[1+a.d:end,1+a.d:end], RSR[1+a.d:end,1+a.d:end])
 

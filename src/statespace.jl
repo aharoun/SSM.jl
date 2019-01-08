@@ -85,8 +85,7 @@ end
 #--------------------------------------------------------------------------------------------------------------
 # calculate log likelihood of whole data based on Kalman filter
 # Y is Txn matrix where T is sample length and n is the number of variables
-# TODO: To speed up, steady state solution of the Kalman filter can be used for P and F after convergence
-
+# TODO: missing data support (it is very easy) 
 function nLogLike(a::AbstractTimeModel, y)
 
     ssm = StateSpace(a)
@@ -115,7 +114,11 @@ function nLogLike(a::AbstractTimeModel, y)
 
 	y_fore   .= ssm.A  .+ ssm.B * sF
 	pred_err .= y[i,:] .- y_fore
-	ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
+	try
+	    ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
+	catch
+	    ylogL[i] = -Inf
+	end
 	# update
 	s .= sF .+ PF * ssm.B' * (F\pred_err)
 	P .= PF .-  PF * ssm.B' * (F\ssm.B)*PF'
@@ -135,13 +138,18 @@ function nLogLike(a::AbstractTimeModel, y)
 	y_fore   .= ssm.A  .+ ssm.B * sF
 	
 	pred_err .= y[j,:] .- y_fore
-	ylogL[j] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err)) 
-	
+
+	try
+	    ylogL[j] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err)) 
+	catch
+	    ylogL[j] = -Inf
+	end
 	## update
 	s .= sF .+ PF * ssm.B' * (F\pred_err)	
     end
 
-    return ylogL
+    return ylogL .- 0.5*log(2*pi)
+ 
 end
 
 # -----------------------------------------------------------------------------------------------
@@ -155,13 +163,15 @@ function _estimate(a::AbstractTimeModel, y)
     a = deepcopy(a)
     estPIndex = findEstParamIndex(a)
     nParEst   = length(vcat(estPIndex...))
-
     pInit = initializeCoeff(a, y, nParEst)
    
+    #pInit = [-.3 ,.1, .1, .1 ,.1]
+
+    nParEst != length(pInit) ? throw("Initial number of parameter is not consistent with the number of parameters to be estimated!") : nothing
 
     res = optimize(x -> sum(negLogLike!(x, a, y, estPIndex)),
 		   pInit,
-		   Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
+		   Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = true))
 
     stdErr = stdErrParam(res.minimizer, x -> negLogLike!(x, a, y, estPIndex))
 

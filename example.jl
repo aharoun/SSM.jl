@@ -32,7 +32,7 @@ a      = arima(2, 1, 1)
 a.ϕ[1] = 0.5;                   # first AR coefficient is fixed at 0.5
 println(a)
 
-aEst, res, std = estimate(a, y);   # rest of the parameters will be estimated
+aEst, estParams, res = estimate(a, y);   # rest of the parameters will be estimated
 
 # Forecast for the next 10 periods
 # yF: point forecast, varF: variance of the forecast

@@ -90,6 +90,11 @@ function StateSpace(a::arima)
 
 end
 
+function estimate(a::arima, y)
+    size(y,2)>1 ? throw("Arima is applicable for only univariate case") : nothing
+    y = repeat(y,1,1)   # just to make it Array{,2}
+    _estimate(a, y)
+end
 
 # Initialize arima coefficients for estimation
 function initializeCoeff(a::arima, y, nParEst)

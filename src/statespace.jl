@@ -106,29 +106,29 @@ function nLogLike(a::AbstractTimeModel, y)
     i = 1
 
     @inbounds while i<=T && !converged
-	# forecast
-	sF .= ssm.C .+ ssm.G * s
-	PF.= ssm.G * P * ssm.G' .+ RSR
-	
-	F .= ssm.B * PF * ssm.B' .+ ssm.H
+        # forecast
+        sF .= ssm.C .+ ssm.G * s
+        PF.= ssm.G * P * ssm.G' .+ RSR
+        
+        F .= ssm.B * PF * ssm.B' .+ ssm.H
 
-	y_fore   .= ssm.A  .+ ssm.B * sF
-	pred_err .= y[i,:] .- y_fore
-	try
-	    ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
-	catch
-	    ylogL[i] = -Inf
-	end
-	# update
-	s .= sF .+ PF * ssm.B' * (F\pred_err)
-	P .= PF .-  PF * ssm.B' * (F\ssm.B)*PF'
-	
-	# break if P, PF and F are converged, go to the second stage
-	maximum(abs.(P .- copyP))<1.0e-18 ? converged = true : nothing
-	
-	copyP = copy(P)
+        y_fore   .= ssm.A  .+ ssm.B * sF
+        pred_err .= y[i,:] .- y_fore
+        try
+            ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
+        catch
+            ylogL[i] = -Inf
+        end
+        # update
+        s .= sF .+ PF * ssm.B' * (F\pred_err)
+        P .= PF .-  PF * ssm.B' * (F\ssm.B)*PF'
+        
+        # break if P, PF and F are converged, go to the second stage
+        maximum(abs.(P .- copyP))<1.0e-18 ? converged = true : nothing
+        
+        copyP = copy(P)
 
-	i += 1
+        i += 1
     end
 
 
@@ -160,10 +160,10 @@ Estimates time series model. All the entries of the estimable parameters with Na
 
 """
 function _estimate(a::AbstractTimeModel, y)
-    a = deepcopy(a)
+    a         = deepcopy(a)
     estPIndex = findEstParamIndex(a)
     nParEst   = length(vcat(estPIndex...))
-    pInit = initializeCoeff(a, y, nParEst)
+    pInit     = initializeCoeff(a, y, nParEst)
    
     #pInit = [-.3 ,.1, .1, .1 ,.1]
 
@@ -171,7 +171,7 @@ function _estimate(a::AbstractTimeModel, y)
 
     res = optimize(x -> sum(negLogLike!(x, a, y, estPIndex)),
 		   pInit,
-		   Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = true))
+		   Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
 
     stdErr = stdErrParam(res.minimizer, x -> negLogLike!(x, a, y, estPIndex))
 

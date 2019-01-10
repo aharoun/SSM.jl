@@ -160,12 +160,11 @@ Estimates time series model. All the entries of the estimable parameters with Na
 
 """
 function _estimate(a::AbstractTimeModel, y)
-    a         = deepcopy(a)
+    a	      = deepcopy(a)
     estPIndex = findEstParamIndex(a)
     nParEst   = length(vcat(estPIndex...))
-    pInit     = initializeCoeff(a, y, nParEst)
+    pInit ::Array{Float64,1}    = initializeCoeff(a, y, nParEst)
    
-    #pInit = [-.3 ,.1, .1, .1 ,.1]
 
     nParEst != length(pInit) ? throw("Initial number of parameter is not consistent with the number of parameters to be estimated!") : nothing
 
@@ -275,5 +274,19 @@ function solveDiscreteLyapunov(A::Array{T,2}, B::Array{T,2}) where T
     return reshape(sol,size(B))
 end
 
+# make deep copy type stable
+Base.deepcopy(m::MyType) where MyType <: AbstractTimeModel = begin
+    len = length(fieldnames(typeof(m)))
+    box = Array{Any,1}(undef,len)
+    
+    for i in 1:len
 
+	try 
+	    box[i] = copy(getfield(m, fieldnames(typeof(m))[i]))
+	catch
+	    box[i] = getfield(m, fieldnames(typeof(m))[i])
+	end
+    end
+	MyType(box...)
+end
 # end

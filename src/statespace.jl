@@ -163,7 +163,7 @@ function _estimate(a::AbstractTimeModel, y)
     a	      = deepcopy(a)
     estPIndex = findEstParamIndex(a)
     nParEst   = length(vcat(estPIndex...))
-    pInit ::Array{Float64,1}    = initializeCoeff(a, y, nParEst)
+    pInit     = initializeCoeff(a, y, nParEst)
    
 
     nParEst != length(pInit) ? throw("Initial number of parameter is not consistent with the number of parameters to be estimated!") : nothing

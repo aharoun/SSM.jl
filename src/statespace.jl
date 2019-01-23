@@ -121,7 +121,7 @@ function nLogLike(a::AbstractTimeModel, y)
         end
         # update
         s .= sF .+ PF * ssm.B' * (F\pred_err)
-        P .= PF .-  PF * ssm.B' * (F\ssm.B)*PF'
+        P .= PF .- PF * ssm.B' * (F\ssm.B)*PF'
         
         # break if P, PF and F are converged, go to the second stage
         maximum(abs.(P .- copyP))<1.0e-18 ? converged = true : nothing

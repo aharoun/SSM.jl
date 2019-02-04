@@ -131,7 +131,7 @@ function nLogLike(a::AbstractTimeModel, y)
         i += 1
     end
 
-
+    # taking advantage of the fact that P and F are converged so that we don't need to update them
     @inbounds for j in i:T
         # forecast
 	sF       .= ssm.C .+ ssm.G * s
@@ -160,7 +160,6 @@ Estimates time series model. All the entries of the estimable parameters with Na
 
 """
 function _estimate(a::AbstractTimeModel, y)
-    a	      = deepcopy(a)
     estPIndex = findEstParamIndex(a)
     nParEst   = length(vcat(estPIndex...))
     pInit     = initializeCoeff(a, y, nParEst)

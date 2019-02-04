@@ -13,6 +13,6 @@ include("arima.jl")
 
 
 export StateSpace, AbstractTimeModel, ssmGeneric, arima,
-nLogLike, arima, simulate, estimate, forecast, _estimate, negLogLike!
+arima, simulate, estimate, forecast, aicbic,aic, bic 
 end # module
 

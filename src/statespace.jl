@@ -257,6 +257,23 @@ end
 
 # -----------------------------------------------------------------------------------------------
 
+# Model selection
+
+function aic(logLike, nEstParams)
+    -2.0*(logLike - nEstParams)
+end
+
+# small sample correction to aic
+function aicC(logLike, nEstParams, T)
+    aic(logLike, nEstParams) + 2*(nEstParams^2 + nEstParams)/(T - nEstParams - 1.0)
+end
+
+function bic(logLike, nEstParams, T)
+    -2.0*logLike + log(T)*nEstParams
+end
+# -----------------------------------------------------------------------------------------------
+
+
 # Utility function
 
 function initializeCoeff(a::AbstractTimeModel, y, nParEst)

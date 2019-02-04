@@ -19,10 +19,12 @@ println(aSim)
 Random.seed!(2);    # fixing seed for reproducibility
 y = simulate(aSim, 500)
 
+# choose lag lenght based on aic or bic (choose the minimum)
+aicTable, bicTable = aicbic(arima(3,1,3), y); # this will calculate aic and bic for all models upto arima(pMax,1,qMax)
+
 # initialize arima model with empty parameters and estimate
 # all parameters with NaN will be estimated
-a = arima(2, 1, 1)
-aEst, estParams, res = estimate(a, y);
+aEst, estParams, res = estimate(arima(2, 1, 1), y);
 # it returns model object with estimated parameters and table summarizing the results
 
 

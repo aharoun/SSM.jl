@@ -24,6 +24,7 @@ function arima(p::Int64,d::Int64,q::Int64)
     arima(p, d, q, ϕ, θ, σ2, c, estimableParamField)
 end
 
+
 # Initialize with parameter vectors, some parameters can be set as NaN. Those can be estimated.
 function arima(; ϕ::Array{T,1} = [NaN], 
 	         θ::Array{T,1} = [NaN], 
@@ -128,10 +129,42 @@ function initializeCoeff(a::arima, y, nParEst)
 
     pσ2 = var(resid)
 
-    parInit = vcat([pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : [] ; isnan.(a.c)[1] ? pc : [] ]...)
+    parInit::Array{Float64,1} = vcat([pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : [] ; isnan.(a.c)[1] ? pc : [] ]...)
 
     return parInit
  end
+
+
+# ---------------------------------------------------------------------------------------------------------------
+
+# Model selection
+
+function aicbic(a::arima, y)
+    max_p = a.p
+    max_q = a.q
+    aicAll = zeros(max_p + 1, max_q + 1)
+    bicAll = similar(aicAll)
+    for p in 0:max_p, q in 0:max_q
+	_,_,res  = estimate(arima(p, a.d, q), y)
+    	aicAll[p+1, q+1] = aic(-res.minimum, p + q + 1) # including the constant
+	bicAll[p+1, q+1] = bic(-res.minimum, p + q + 1, size(y, 1)) # including the constant
+
+    end
+
+    aicTable = NamedArray(aicAll)
+    setnames!(aicTable , string.(0:max_p),1)
+    setnames!(aicTable , string.(0:max_q),2)
+    aicTable.dimnames = ("AR", "MA")
+
+    bicTable = NamedArray(bicAll)
+    setnames!(bicTable , string.(0:max_p),1)
+    setnames!(bicTable , string.(0:max_q),2)
+    bicTable.dimnames = ("AR", "MA")
+
+    return aicTable, bicTable
+
+end
+
 
 # end
 

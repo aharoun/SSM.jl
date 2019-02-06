@@ -163,22 +163,23 @@ function _estimate(a::AbstractTimeModel, y)
     estPIndex = findEstParamIndex(a)
     nParEst   = length(vcat(estPIndex...))
     pInit     = initializeCoeff(a, y, nParEst)
-   
-
-    nParEst != length(pInit) ? throw("Initial number of parameter is not consistent with the number of parameters to be estimated!") : nothing
-
-    res = optimize(x -> sum(negLogLike!(x, a, y, estPIndex)),
-		   pInit,
-		   Optim.Options(g_tol = 1.0e-8, iterations = 1000, store_trace = false, show_trace = false))
-
-    stdErr = stdErrParam(res.minimizer, x -> negLogLike!(x, a, y, estPIndex))
-
-    negLogLike!(res.minimizer, a, y, estPIndex)    # to cast the model parameters at minimizer
+    nParEst  != length(pInit) ? throw("Initial number of parameter is not consistent with the number of parameters to be estimated!") : nothing
     
-    resTable = NamedArray([res.minimizer stdErr])
+    # optimization
+    opt = Opt(:LN_NELDERMEAD, nParEst)
+    ftol_rel!(opt,1e-7)
+    min_objective!(opt, (x, grad) -> sum(negLogLike!(x, a, y, estPIndex)))
+    minf,minx,ret = NLopt.optimize(opt, pInit)
+    
+    stdErr = stdErrParam(minx, x -> negLogLike!(x, a, y, estPIndex))
+
+    negLogLike!(minx, a, y, estPIndex)    # to cast the model parameters at minimizer
+    
+    resTable = NamedArray([minx stdErr])
     setnames!(resTable, ["Point Est.", "Std. Error"], 2)
     resTable.dimnames = ("Parameters", "")
-    return a, resTable, res
+
+    return a, resTable, Dict("minx"=>minx, "minf"=>minf, "ret"=>ret,"opt"=>opt) 
 end
 
 function estimate(a::AbstractTimeModel, y)

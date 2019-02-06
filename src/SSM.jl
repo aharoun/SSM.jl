@@ -1,10 +1,10 @@
 module SSM
 
 using LinearAlgebra
-using Optim
-using Statistics: var
+using Statistics: var, mean
 using Calculus
 using NamedArrays
+using NLopt
 
 import Base.show
 
@@ -13,6 +13,6 @@ include("arima.jl")
 
 
 export StateSpace, AbstractTimeModel, ssmGeneric, arima,
-arima, simulate, estimate, forecast, aicbic,aic, bic 
+arima, simulate, estimate, forecast, aicbic,aic, bic,_estimate,negLogLike! 
 end # module
 

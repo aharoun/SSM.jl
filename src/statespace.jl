@@ -108,14 +108,14 @@ function nLogLike(a::AbstractTimeModel, y)
     @inbounds while i<=T && !converged
         # forecast
         sF .= ssm.C .+ ssm.G * s
-        PF.= ssm.G * P * ssm.G' .+ RSR
+        PF .= ssm.G * P * ssm.G' .+ RSR
         
-        F .= ssm.B * PF * ssm.B' .+ ssm.H
+        F  .= ssm.B * PF * ssm.B' .+ ssm.H
 
         y_fore   .= ssm.A  .+ ssm.B * sF
         pred_err .= y[i,:] .- y_fore
         try
-            ylogL[i] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err))
+            ylogL[i] = -0.5 * (logdet(F) + pred_err'*(F\pred_err))
         catch
             ylogL[i] = -Inf
         end
@@ -124,7 +124,7 @@ function nLogLike(a::AbstractTimeModel, y)
         P .= PF .- PF * ssm.B' * (F\ssm.B)*PF'
         
         # break if P, PF and F are converged, go to the second stage
-        maximum(abs.(P .- copyP))<1.0e-18 ? converged = true : nothing
+        maximum(abs.(P .- copyP))<1.0e-8 ? converged = true : nothing
         
         copyP = copy(P)
 
@@ -140,7 +140,7 @@ function nLogLike(a::AbstractTimeModel, y)
 	pred_err .= y[j,:] .- y_fore
 
 	try
-	    ylogL[j] = (-1/2) * (logdet(F) + pred_err'*(F\pred_err)) 
+	    ylogL[j] = -0.5 * (logdet(F) + pred_err'*(F\pred_err)) 
 	catch
 	    ylogL[j] = -Inf
 	end
@@ -148,7 +148,7 @@ function nLogLike(a::AbstractTimeModel, y)
 	s .= sF .+ PF * ssm.B' * (F\pred_err)	
     end
 
-    return ylogL .- 0.5*log(2*pi)
+    return ylogL .- 0.5*log(2.0*pi)
  
 end
 
@@ -170,6 +170,7 @@ function _estimate(a::AbstractTimeModel, y)
     ftol_rel!(opt,1e-7)
     min_objective!(opt, (x, grad) -> sum(negLogLike!(x, a, y, estPIndex)))
     minf,minx,ret = NLopt.optimize(opt, pInit)
+    nEvals = opt.numevals
     
     stdErr = stdErrParam(minx, x -> negLogLike!(x, a, y, estPIndex))
 
@@ -179,7 +180,7 @@ function _estimate(a::AbstractTimeModel, y)
     setnames!(resTable, ["Point Est.", "Std. Error"], 2)
     resTable.dimnames = ("Parameters", "")
 
-    return a, resTable, Dict("minx"=>minx, "minf"=>minf, "ret"=>ret,"opt"=>opt) 
+    return a, resTable, Dict("xinit"=>pInit, "minx"=>minx, "minf"=>minf, "ret"=>ret,"opt"=>opt, "nEvals"=>nEvals) 
 end
 
 function estimate(a::AbstractTimeModel, y)

@@ -6,7 +6,7 @@ mutable struct arima{T<:Real} <: AbstractTimeModel
     q :: Int64		# MA length
     ϕ :: Array{T,1}	# AR coefficients
     θ :: Array{T,1}	# MA coefficients
-    σ2:: Array{T,1}	# variance of error term
+    σ²:: Array{T,1}	# variance of error term
     c :: Array{T,1}	# constant term
 
     estimableParamField :: NTuple{4, Symbol}  # holds the fields of a model type that can be estimated
@@ -17,25 +17,25 @@ end
 function arima(p::Int64,d::Int64,q::Int64)
     ϕ  = fill(NaN,p)
     θ  = fill(NaN,q)
-    σ2 = fill(NaN,1)
+    σ² = fill(NaN,1)
      c = fill(NaN,1)
-    estimableParamField = (:ϕ, :θ, :σ2, :c)
+    estimableParamField = (:ϕ, :θ, :σ², :c)
 
-    arima(p, d, q, ϕ, θ, σ2, c, estimableParamField)
+    arima(p, d, q, ϕ, θ, σ², c, estimableParamField)
 end
 
 
 # Initialize with parameter vectors, some parameters can be set as NaN. Those can be estimated.
 function arima(; ϕ::Array{T,1} = [NaN], 
 	         θ::Array{T,1} = [NaN], 
-	        σ2::Array{T,1} = [NaN],
+	         σ²::Array{T,1} = [NaN],
 		 c::Array{T,1} = [NaN], 
 		 d::Int64 = 0) where T
     p = length(ϕ)
     q = length(θ)
 
-    estimableParamField = (:ϕ, :θ, :σ2, :c)
-    arima(p, d, q, ϕ, θ, σ2, c, estimableParamField)
+    estimableParamField = (:ϕ, :θ, :σ², :c)
+    arima(p, d, q, ϕ, θ, σ², c, estimableParamField)
 end
 
 function Base.show(io::IO, a::arima)
@@ -43,7 +43,7 @@ function Base.show(io::IO, a::arima)
     println(io,"-------------------")
     println(io," AR: ",a.ϕ)
     println(io," MA: ",a.θ)
-    println(io," σ2: ",a.σ2)
+    println(io," σ²: ",a.σ²)
     println(io,"  c: ",a.c)
 end
 
@@ -70,7 +70,7 @@ function StateSpace(a::arima)
     R[1+a.d:1+a.q+a.d] = [1.0;a.θ]
 
     H = zeros(1,1)
-    S = fill(a.σ2...,1,1)
+    S = fill(a.σ²...,1,1)
 
 
     # initialize non stationary states at zero with large variance, stationary states at their unconditional mean and
@@ -127,9 +127,9 @@ function initializeCoeff(a::arima, y, nParEst)
 
     pMA = (X'*X)\(X'*resid[a.q+1:end])
 
-    pσ2 = var(resid)
+    pσ² = var(resid)
 
-    parInit::Array{Float64,1} = vcat([pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ2)[1] ? pσ2 : [] ; isnan.(a.c)[1] ? pc : [] ]...)
+    parInit::Array{Float64,1} = vcat([pAR[isnan.(a.ϕ)]; pMA[isnan.(a.θ)]; isnan.(a.σ²)[1] ? pσ² : [] ; isnan.(a.c)[1] ? pc : [] ]...)
 
     return parInit
  end

@@ -32,10 +32,11 @@ function StateSpace(A, B, C, G, R, H, S)
     n = size(G,1)
 
     if maximum(abs.(eigvals(G)))>=0.9999
-	warning("State space representation is nonstationary. All states will be initialized in a diffuse way.")
+	@warn("State space representation is nonstationary. All states will be initialized in a diffuse way.")
 	x0 = zeros(n)
 	P0 = diagm(0 => ones(n) * 1.0e8)
     else
+	# initialize at the implied unconditional distribution
 	s0 = (I - ssm.G)\ssm.C
 	P0 = solveDiscreteLyapunov(ssm.G, ssm.R*ssm.S*ssm.R')
     end
@@ -82,10 +83,12 @@ function simulate(a::AbstractTimeModel, T)
 
     simulate(ssm, T)
 end
+
 #--------------------------------------------------------------------------------------------------------------
-# calculate log likelihood of whole data based on Kalman filter
+# calculate log likelihood of whole data based on predictive error decomposition (via Kalman filter)
 # Y is Txn matrix where T is sample length and n is the number of variables
 # TODO: missing data support (it is very easy) 
+#
 function nLogLike(a::AbstractTimeModel, y)
 
     ssm = StateSpace(a)
@@ -165,21 +168,21 @@ function _estimate(a::AbstractTimeModel, y)
     pInit     = initializeCoeff(a, y, nParEst)
     nParEst  != length(pInit) ? throw("Initial number of parameter is not consistent with the number of parameters to be estimated!") : nothing
     
-    # optimization
+    # ------------ #
+    # optimization #
+    # --------------------------------------------------------------------- # 
     opt = Opt(:LN_NELDERMEAD, nParEst)
     ftol_rel!(opt,1e-7)
     min_objective!(opt, (x, grad) -> sum(negLogLike!(x, a, y, estPIndex)))
     minf,minx,ret = NLopt.optimize(opt, pInit)
     nEvals = opt.numevals
-    
+    # --------------------------------------------------------------------- # 
+
     stdErr = stdErrParam(minx, x -> negLogLike!(x, a, y, estPIndex))
 
     negLogLike!(minx, a, y, estPIndex)    # to cast the model parameters at minimizer
+    resTable = constructResTable(a, minx, stdErr, estPIndex)
     
-    resTable = NamedArray([minx stdErr])
-    setnames!(resTable, ["Point Est.", "Std. Error"], 2)
-    resTable.dimnames = ("Parameters", "")
-
     return a, resTable, Dict("xinit"=>pInit, "minx"=>minx, "minf"=>minf, "ret"=>ret,"opt"=>opt, "nEvals"=>nEvals) 
 end
 
@@ -212,7 +215,24 @@ function stdErrParam(parEst,nlogl::Function)
     std    = sqrt.(diag(cov))
 end
 
+function constructResTable(a::AbstractTimeModel, minx, stdErr, estPIndex)
+    rowNames = Array{String,1}(undef,length(minx))
+    count = 1
+    for (i, valF) in enumerate(a.estimableParamField)
+	for j in estPIndex[i]
+	    rowNames[count] = string(valF,"[", j, "]")
+	    count += 1 
+	end
+    end
+    resTable = NamedArray([minx stdErr],)
+    setnames!(resTable, ["Point Est.", "Std. Error"], 2)
+    setnames!(resTable, rowNames, 1)
 
+    resTable.dimnames = ("Parameters", "")
+
+    return resTable
+
+end
 
 function forecast(a::AbstractTimeModel, y, Tf)
 

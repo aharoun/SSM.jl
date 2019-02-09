@@ -8,11 +8,11 @@ aSim    = arima(2, 1, 1)
 # fill the parameters
 aSim.ϕ  = [0.5, -0.3];      # AR coeff
 aSim.θ  = [0.1];            # MA coeff
-aSim.σ2 = [0.1];            # variance of error term
+aSim.σ² = [0.1];            # variance of error term
 aSim.c  = [0.1];            # constant term
 println(aSim)
 # or use arima(ϕ, θ, σ², c, d) notation
-# aSim = arima(ϕ = [NaN, 0.1], θ = [0.2], σ2 = [0.1], c = [0.2], d = 1)
+# aSim = arima(ϕ = [NaN, 0.1], θ = [0.2], σ² = [0.1], c = [0.2], d = 1)
 
 # simulate arima with sample size 500
 # here we can also pass a StateSpace object directly

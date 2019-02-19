@@ -146,8 +146,8 @@ function aicbic(a::arima, y)
     bicAll = similar(aicAll)
     for p in 0:max_p, q in 0:max_q
 	_,_,res  = estimate(arima(p, a.d, q), y)
-	aicAll[p+1, q+1] = aic(-res["minf"], p + q + 1) # including the constant
-	bicAll[p+1, q+1] = bic(-res["minf"], p + q + 1, size(y, 1)) # including the constant
+	aicAll[p+1, q+1] = aic(-res.minf, p + q + 1) # including the constant
+	bicAll[p+1, q+1] = bic(-res.minf, p + q + 1, size(y, 1)) # including the constant
 
     end
 

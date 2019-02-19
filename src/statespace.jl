@@ -182,8 +182,8 @@ function _estimate(a::AbstractTimeModel, y)
 
     negLogLike!(minx, a, y, estPIndex)    # to cast the model parameters at minimizer
     resTable = constructResTable(a, minx, stdErr, estPIndex)
-    
-    return a, resTable, Dict("xinit"=>pInit, "minx"=>minx, "minf"=>minf, "ret"=>ret,"opt"=>opt, "nEvals"=>nEvals) 
+    res = (xinit=pInit, minx=minx, minf=minf, ret=ret, opt=opt, nEvals=nEvals)  
+    return a, resTable, res 
 end
 
 function estimate(a::AbstractTimeModel, y)

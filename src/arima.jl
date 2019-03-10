@@ -15,10 +15,10 @@ end
 
 # Initialize arima object with empty parameters
 function arima(p::Int64,d::Int64,q::Int64)
-    ϕ  = fill(NaN,p)
-    θ  = fill(NaN,q)
-    σ² = fill(NaN,1)
-     c = fill(NaN,1)
+    ϕ::Array{Real,1}   = fill(NaN,p)
+    θ::Array{Real,1}   = fill(NaN,q)
+    σ²::Array{Real,1}  = fill(NaN,1)
+    c::Array{Real,1}   = fill(NaN,1)
     estimableParamField = (:ϕ, :θ, :σ², :c)
 
     arima(p, d, q, ϕ, θ, σ², c, estimableParamField)
@@ -52,24 +52,24 @@ end
 function StateSpace(a::arima)
     m = max(a.p,a.q + 1)
 
-    A = zeros(1)
-    B = zeros(1,m + a.d)
+    A = zeros(eltype(a.c[1]),1)
+    B = zeros(eltype(a.c[1]),1,m + a.d)
     B[1,1:a.d+1] .= 1.0
 
-    C = zeros(m + a.d)
+    C = zeros(eltype(a.c[1]),m + a.d)
     C[a.d+1]  = a.c[1]
 
-    G = zeros(m + a.d,m + a.d)
+    G = zeros(eltype(a.c[1]),m + a.d,m + a.d)
     G[1+a.d:a.p+a.d,1 + a.d]   = a.ϕ
     G[1+a.d:m-1+a.d,2+a.d:end] = diagm(0 => ones(m-1))
     for i in 1:a.d
         G[i,i:a.d+1] .= 1.0
     end
 
-    R = zeros(m + a.d,1)
+    R = zeros(eltype(a.c[1]),m + a.d,1)
     R[1+a.d:1+a.q+a.d] = [1.0;a.θ]
 
-    H = zeros(1,1)
+    H = zeros(eltype(a.c[1]),1,1)
     S = fill(a.σ²...,1,1)
 
 
@@ -77,16 +77,16 @@ function StateSpace(a::arima)
     # covariance
     nG = size(G,1)
 
-    x0 = zeros(nG)
-    x0[a.d+1:end] = (I - G[a.d+1:end,a.d+1:end])\C[a.d+1:end]
+    x0 = zeros(eltype(a.c[1]),nG)
+    # x0[a.d+1:end] = (I - G[a.d+1:end,a.d+1:end])\C[a.d+1:end]
 
     RSR = R*S*R'
-    P0   = zeros(nG,nG)
+    P0   = zeros(eltype(a.c[1]),nG,nG)
     for i in 1:a.d
        P0[i,i] = 1.0e9 
     end
-    P0[1+a.d:end, 1+a.d:end] .= solveDiscreteLyapunov(G[1+a.d:end,1+a.d:end], RSR[1+a.d:end,1+a.d:end])
-
+    # P0[1+a.d:end, 1+a.d:end] .= solveDiscreteLyapunov(G[1+a.d:end,1+a.d:end], RSR[1+a.d:end,1+a.d:end])
+    
     StateSpace(A, B, C, G, R, H, S, x0, P0, a)
 
 end

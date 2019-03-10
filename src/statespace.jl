@@ -100,7 +100,7 @@ function nLogLike(a::AbstractTimeModel, y)
     PF      = similar(P)
     copyP   = similar(P)
     F       = similar(ssm.H)
-    ylogL   = zeros(T)
+    ylogL   = zeros(eltype(ssm.G),T)
     RSR     = ssm.R*ssm.S*ssm.R'
     y_fore  = similar(ssm.A)
     pred_err= similar(y_fore)
@@ -137,8 +137,8 @@ function nLogLike(a::AbstractTimeModel, y)
     # taking advantage of the fact that P and F are converged so that we don't need to update them
     @inbounds for j in i:T
         # forecast
-	sF       .= ssm.C .+ ssm.G * s
-	y_fore   .= ssm.A  .+ ssm.B * sF
+	sF       .= ssm.C  .+ ssm.G*s
+	y_fore   .= ssm.A  .+ ssm.B*sF
 	
 	pred_err .= y[j,:] .- y_fore
 
@@ -171,9 +171,19 @@ function _estimate(a::AbstractTimeModel, y)
     # ------------ #
     # optimization #
     # --------------------------------------------------------------------- # 
-    opt = Opt(:LN_NELDERMEAD, nParEst)
+    opt = Opt(:LD_MMA, nParEst)
     ftol_rel!(opt,1e-7)
-    min_objective!(opt, (x, grad) -> sum(negLogLike!(x, a, y, estPIndex)))
+
+    function objFun(x,grad)
+	if length(grad) > 0
+	    grad .= ForwardDiff.gradient(x->sum(negLogLike!(x, a, y, estPIndex)),x)
+	end
+
+	sum(negLogLike!(x, a, y, estPIndex))
+    end
+    grad = similar(pInit)
+    objFun(pInit,grad)
+    min_objective!(opt, objFun)
     minf,minx,ret = NLopt.optimize(opt, pInit)
     nEvals = opt.numevals
     # --------------------------------------------------------------------- # 
@@ -305,6 +315,7 @@ end
 
 findEstParamIndex(a::AbstractTimeModel)::Array{Array{Int64,1},1} = [findall(isnan, getfield(a,fn))  for fn in a.estimableParamField]
 
+#[isassigned(getproperty(a,fn),i)  for fn in a.estimableParamField for i in 1:size(getproperty(a,fn),1)]
 # Solve discrete Lyapunov equation AXA' - X + B = 0.
 function solveDiscreteLyapunov(A::Array{T,2}, B::Array{T,2}) where T
     aux = I - kron(A, A)

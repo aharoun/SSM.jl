@@ -137,6 +137,128 @@ function initializeCoeff(a::arima, y, nParEst)
 
 # ---------------------------------------------------------------------------------------------------------------
 
+
+function initializeCoeff2(a::arima, y, nParEst)
+    dy = copy(y)
+    for i in 1:a.d
+	dy = diff(dy, dims=1)
+    end
+
+    T = size(dy,1)
+    meanDy = mean(dy)
+    dy .-= meanDy  #demean
+    
+    # autocovariance
+    cov = zeros(a.p + a.q+ 1)
+    for i in 0:(a.p + a.q) 
+	cov[i+1] = dot(dy[1:end-i],dy[1+i:end])/T
+    end
+
+    # solve AR coeff
+    A = zeros(a.p, a.p)
+    for i in 1:a.p, j in 1:a.p
+	A[i,j] = cov[abs(a.q + i - j) + 1]
+    end
+    b = cov[a.q .+ (1:a.p) .+ 1]
+    
+    ϕInit = A\b
+    if abs(sum(ϕInit))>1.0
+	ϕInit = zeros(length(ϕInit))    
+    end
+
+    #Solve MA
+    covM = zeros(a.q + 1) # modified autcovariance
+    ϕInitA = [-1.0; ϕInit]
+   
+    if a.p == 0
+	covM .= cov[1:a.q+1]
+    else
+	for j in 0:a.q
+	    aux = 0.0
+	    for i in 0:a.p
+		for k in 0:a.p
+		    aux += ϕInitA[i+1]*ϕInitA[k+1]*cov[abs(i + j - k) + 1]
+		end
+	    end
+	    covM[j+1] = aux
+	end
+    end
+
+    # iteration
+    crit = 1.0; iter = 0
+    θ = zeros(a.q+1)
+    θCopy = ones(a.q+1)
+    σ² = 0.1
+
+    while crit>1.0e-8 && iter<100
+	σ² = covM[1]/(1 + sum(θ[2:end].^2))
+
+	for j in a.q:-1:1
+	    aux1 = zeros(a.q-1)
+	    aux2 = zeros(a.q-1)
+
+	    aux1[1:a.q-j] .= θ[2:a.q-j+1]
+	    aux2[1:a.q-j] .= θ[j+2:a.q+1]
+	    θ[j+1] = covM[j+1]/σ² - sum(aux1.*aux2)
+	end
+	crit = maximum(abs, θ .- θCopy)
+	θCopy = copy(θ)
+	iter += 1 
+    end
+    if isnan(crit) || isinf(crit) || crit>1.0e-8 || iter>=100
+	θ  = ones(a.q)*0.1
+	σ² = 0.1
+    else
+	θ = θ[2:end]
+    end
+
+    cInit = a.p==0 ? meanDy : meanDy*(1.0 - sum(ϕInit))
+    parInit::Array{Float64,1} = vcat([ϕInit[isnan.(a.ϕ)]; θ[isnan.(a.θ)]; isnan.(a.σ²)[1] ? σ² : [] ; isnan.(a.c)[1] ? cInit : [] ]...)
+
+
+    # Newton-Raphson
+    # τ =  zeros(a.q+1)
+    # τ[1] = sqrt(covM[1])
+    # τNew = similar(τ)
+
+    # crit = 1.0
+    # maxIter = 1000
+    # iter = 0
+    # f = ones(a.q+1)
+    # TT1 = zeros(a.q+1, a.q+1)
+    # TT2 = similar(TT1)
+    # TT  = similar(TT1)
+
+    # while crit>1.0e-8 && iter<maxIter
+	# for j in 0:a.q
+	    # f[j+1] = dot(τ[1:a.q - j + 1], τ[1+j:end]) - covM[j+1]
+	# end
+	
+	# for i in 1:a.q+1
+	    # TT1[i,1:end-i+1] = τ[i:end] 
+	    # TT2[i,i:end] = τ[1:end-i+1]
+	# end
+	# TT .= TT1 .+ TT2
+
+	# h = TT\f
+	# τNew .= τ .- h 
+
+	# crit = maximum(abs.(τ.- τNew))
+	# τ .= τNew 
+	# iter += 1
+    # end
+    
+    # if crit>1.0e-8
+	# println("Didn't converge!!!")
+	# θInit = zeros(length(τ)-1)
+    # else
+	# θInit = τ[2:end]./τ[1]
+    # end
+    # σ²Init = τ[1]^2
+
+end
+
+
 # Model selection
 
 function aicbic(a::arima, y)

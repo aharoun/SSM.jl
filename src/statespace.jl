@@ -171,18 +171,17 @@ function _estimate(a::AbstractTimeModel, y)
     # ------------ #
     # optimization #
     # --------------------------------------------------------------------- # 
-    opt = Opt(:LD_MMA, nParEst)
+    opt = Opt(:LD_LBFGS, nParEst)
     ftol_rel!(opt,1e-7)
 
     function objFun(x,grad)
-	if length(grad) > 0
-	    grad .= ForwardDiff.gradient(x->sum(negLogLike!(x, a, y, estPIndex)),x)
-	end
-
-	sum(negLogLike!(x, a, y, estPIndex))
+	result = DiffResults.GradientResult(x)
+	result = ForwardDiff.gradient!(result,x->sum(negLogLike!(x, a, y, estPIndex)),x)
+	grad  .= DiffResults.gradient(result) 
+	return DiffResults.value(result)
     end
     grad = similar(pInit)
-    objFun(pInit,grad)
+    @time objFun(pInit,grad)
     min_objective!(opt, objFun)
     minf,minx,ret = NLopt.optimize(opt, pInit)
     nEvals = opt.numevals

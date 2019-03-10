@@ -6,6 +6,7 @@ using Calculus
 using NamedArrays
 using NLopt
 using ForwardDiff
+using DiffResults
 import Base.show
 
 include("statespace.jl")

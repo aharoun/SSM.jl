@@ -180,8 +180,9 @@ function _estimate(a::AbstractTimeModel, y)
 	grad  .= DiffResults.gradient(result) 
 	return DiffResults.value(result)
     end
-    grad = similar(pInit)
-    @time objFun(pInit,grad)
+
+    ## NOTE
+    #  Objective function runs terribly slow since we define the field of arima in real to be abte to use ForwardDiff.
     min_objective!(opt, objFun)
     minf,minx,ret = NLopt.optimize(opt, pInit)
     nEvals = opt.numevals
